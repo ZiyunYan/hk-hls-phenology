@@ -6,6 +6,7 @@ __pycache__/
 .DS_Store
 impute_shards/
 hf_staging/
+hf_model_upload/
 *.npz
 
 # Weights (hosted on Hugging Face)

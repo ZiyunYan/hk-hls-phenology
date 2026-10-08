@@ -8,9 +8,12 @@ Self-contained copy of training/inference code for HK HLS imputation. **Edits he
 - `exp/`, `models/`, `layers/`, `utils/`, `data_provider/` — copied snapshot (2026-10-08)
 - `checkpoints/` — HK weights for this project (not shared with USA repo)
 
-## Data (unchanged)
+## Data & weights (Hub)
 
-`/intelnvme03/ziyun218/hls_49QHE_hk/imputator_hk/{train,test}.nc`
+- Dataset: https://huggingface.co/datasets/ZiyunPOLYU/hk-hls-phenology  
+- Best checkpoint: https://huggingface.co/ZiyunPOLYU/hk-hls-imputator  
+
+Local cluster path (optional): `/intelnvme03/ziyun218/hls_49QHE_hk/imputator_hk/{train,test}.nc`
 
 ## Train
 

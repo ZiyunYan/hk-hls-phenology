@@ -9,8 +9,11 @@ hf_staging/
 hf_model_upload/
 *.npz
 
-# Weights (hosted on Hugging Face)
+# Weights: only published HK checkpoints are tracked (see checkpoints/*/README.md)
 imputator_ssl/checkpoints/**/*.pth
+!imputator_ssl/checkpoints/HK-Imputator-optical6-topk5-s1-sl366/checkpoint.pth
+!imputator_ssl/checkpoints/HK-Imputator-optical6-topk5-s1-sl122/checkpoint.pth
+!imputator_ssl/checkpoints/HK-Imputator-optical6-topk5-s1-sl244/checkpoint.pth
 
 # Local HLS paths (data on Hub / cluster storage)
 /intelnvme*/

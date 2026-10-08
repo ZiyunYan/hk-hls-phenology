@@ -54,12 +54,15 @@ bash train_imputator_window_ablation.sh
 
 Runs `imputator_ssl/run.py` with `--data HLS` and `root_path` pointing at `imputator_hk/` NetCDF shards. Checkpoints are written under `imputator_ssl/checkpoints/`.
 
-## Best checkpoint (inference default)
+## Checkpoints (in GitHub)
 
-- **6 bands**: Blue, Green, Red, NIR (L30 B05 / S30 B8A), SWIR1, SWIR2  
-- **366-step** encoder; inference uses 11 overlapping year windows (stride 122)  
-- Recipe: mask 0.4–0.8 (train), `imp_trim_topk_per_seq=5`, `imp_smooth_beta=1`  
-- See `imputator_ssl/checkpoints/HK-Imputator-optical6-topk5-s1-sl366/README.md`
+| Model | Path | Inference |
+|-------|------|-----------|
+| **sl366** (production) | `imputator_ssl/checkpoints/HK-Imputator-optical6-topk5-s1-sl366/checkpoint.pth` | 3-year context → 1-year output |
+| **sl122** | `.../HK-Imputator-optical6-topk5-s1-sl122/checkpoint.pth` | **一年一窗** (122 steps per forward) |
+| **sl244** | `.../HK-Imputator-optical6-topk5-s1-sl244/checkpoint.pth` | **两年一窗** (244 steps per forward) |
+
+Full rules: **[docs/IMPUTE_WINDOWS.md](docs/IMPUTE_WINDOWS.md)**.
 
 ## Citation & LULC
 

@@ -41,7 +41,10 @@ hk_phenology/
 1. **Composite** (once): `composite_veg_cube.py` → `phenology/veg_cube.nc`
 2. **Mask**: `apply_veg_mask.py` (no agriculture; stable 2018∩2024 natural vegetation)
 3. **Impute**: `run_impute_fast.sh` or `impute_vegetation.py` → `veg_filled.nc`
-4. **Phenology**: `phenology_hplm.py` → `phenology_sos_eos.nc`
+4. **Phenology** (default **SG-9** smooth before Zhang HPLM):
+   - Quick try: `bash run_try_smooth.sh` (300 veg pixels, all smooth methods, ~秒级)
+   - Full grid: `phenology_from_cube.py --smooth sg9` (`--max-pixels 5000` for test)
+   - Point nc: `phenology_hplm.py --smooth sg9`
 5. **Drivers**: `analyze_drivers.py`
 
 Cluster data root (not in Git): `/intelnvme03/ziyun218/hls_49QHE_hk/`

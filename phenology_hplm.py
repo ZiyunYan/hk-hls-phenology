@@ -5,10 +5,11 @@ The fit is Xiaoyang Zhang's hybrid piecewise logistic model. Each year is split
 at the greenness peak. An increasing logistic is fit to the green-up limb and a
 decreasing logistic to the senescence limb. SOS is the green-up onset and EOS is
 the dormancy onset, both at the curvature-change extrema
-t0 ± ln(2+sqrt(3))/k. Pixel row, column, longitude and latitude are copied.
+t0 ± ln(2+sqrt(3))/k.
 """
 from __future__ import annotations
 
+import argparse
 import time
 from pathlib import Path
 
@@ -16,9 +17,11 @@ import numpy as np
 from netCDF4 import Dataset
 from numba import njit
 
-ROOT = Path("/intelnvme03/ziyun218/hls_49QHE_hk/phenology")
-SRC = ROOT / "veg_filled.nc"
-DST = ROOT / "phenology_sos_eos.nc"
+from hk_paths import PHENO
+from phenology_smooth import SMOOTH_METHODS, smooth_annual
+
+SRC = PHENO / "veg_filled.nc"
+DST = PHENO / "phenology_sos_eos.nc"
 STEPS = 122
 N_YEARS = 11
 YEAR0 = 2015
@@ -158,39 +161,19 @@ def _fit_logistic(t, y, increasing):
 
 
 @njit
-def metrics_one_year(y):
-    """y is 122 EVI2 samples at DOY 1,4,...,364. Returns SOS, EOS as DOY."""
+def metrics_one_year_smoothed(smooth):
+    """122-step EVI2 already smoothed. Returns SOS, EOS as DOY."""
     t = np.empty(122, np.float64)
     for i in range(122):
         t[i] = 1.0 + 3.0 * i
     finite = np.zeros(122, np.uint8)
     nfin = 0
     for i in range(122):
-        if np.isfinite(y[i]):
+        if np.isfinite(smooth[i]):
             finite[i] = 1
             nfin += 1
     if nfin < MIN_VALID:
         return np.nan, np.nan
-    smooth = y.copy()
-    for i in range(122):
-        if finite[i] == 0:
-            continue
-        vals = np.empty(5, np.float64)
-        m = 0
-        for k in range(-2, 3):
-            j = i + k
-            if 0 <= j < 122 and finite[j] == 1:
-                vals[m] = y[j]
-                m += 1
-        if m == 0:
-            continue
-        for a in range(m):
-            for b in range(a + 1, m):
-                if vals[b] < vals[a]:
-                    tmp = vals[a]
-                    vals[a] = vals[b]
-                    vals[b] = tmp
-        smooth[i] = vals[m // 2]
     peak = -1
     peak_v = -1e9
     for i in range(122):
@@ -243,19 +226,31 @@ def metrics_one_year(y):
     return sos, eos
 
 
-@njit
-def metrics_block(evi, sos, eos):
+def metrics_one_year(y: np.ndarray, smooth_method: str = "median5") -> tuple[float, float]:
+    sm = smooth_annual(np.asarray(y, np.float32), smooth_method)
+    return metrics_one_year_smoothed(sm)
+
+
+def metrics_block(evi: np.ndarray, sos: np.ndarray, eos: np.ndarray, smooth_method: str) -> None:
+    """evi (n_pixels, n_time). Smooth in Python, HPLM in numba."""
     n = evi.shape[0]
     for i in range(n):
         for year in range(N_YEARS):
-            y = evi[i, year * STEPS:(year + 1) * STEPS]
-            s, e = metrics_one_year(y)
+            y = evi[i, year * STEPS : (year + 1) * STEPS]
+            sm = smooth_annual(y, smooth_method)
+            s, e = metrics_one_year_smoothed(sm)
             sos[i, year] = s
             eos[i, year] = e
 
 
 def main() -> None:
-    with Dataset(SRC) as src:
+    p = argparse.ArgumentParser()
+    p.add_argument("--smooth", choices=SMOOTH_METHODS, default="sg9", help="pre-HPLM EVI2 smooth")
+    p.add_argument("--src", type=Path, default=SRC)
+    p.add_argument("--dst", type=Path, default=DST)
+    args = p.parse_args()
+    src_path, dst_path = args.src, args.dst
+    with Dataset(src_path) as src:
         n = len(src.dimensions["pixels"])
         log(f"pixels {n}")
         sos = np.full((n, N_YEARS), np.nan, np.float32)
@@ -266,11 +261,11 @@ def main() -> None:
             red = np.array(src.variables["data"][p0:p1, :, 2], np.float32)
             nir = np.array(src.variables["data"][p0:p1, :, 3], np.float32)
             series = evi2(red, nir)
-            metrics_block(series, sos[p0:p1], eos[p0:p1])
+            metrics_block(series, sos[p0:p1], eos[p0:p1], args.smooth)
             log(f"phenology {p1}/{n}")
-        if DST.exists():
-            DST.unlink()
-        with Dataset(DST, "w", format="NETCDF4") as dst:
+        if dst_path.exists():
+            dst_path.unlink()
+        with Dataset(dst_path, "w", format="NETCDF4") as dst:
             dst.createDimension("pixels", n)
             dst.createDimension("year", N_YEARS)
             dst.createVariable("year", "i2", ("year",))[:] = np.arange(YEAR0, YEAR0 + N_YEARS, dtype=np.int16)
@@ -286,12 +281,13 @@ def main() -> None:
                 var = src.variables[name]
                 copied = dst.createVariable(name, var.dtype, ("pixels",))
                 copied[:] = var[:]
-            dst.setncattr("method", "Xiaoyang Zhang hybrid piecewise logistic model on EVI2")
+            dst.setncattr("method", "Zhang hybrid piecewise logistic on smoothed EVI2")
+            dst.setncattr("smooth_method", args.smooth)
             dst.setncattr("evi2", "2.5*(NIR-Red)/(NIR+2.4*Red+1), reflectance = DN/10000")
             ok = np.isfinite(sos) & np.isfinite(eos)
             log(f"valid pixel-years {int(ok.sum())} / {ok.size}")
             dst.setncattr("n_valid_pixel_years", int(ok.sum()))
-    log(f"wrote {DST}")
+    log(f"wrote {dst_path}")
 
 
 if __name__ == "__main__":

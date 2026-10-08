@@ -1,0 +1,15 @@
+__pycache__/
+*.py[cod]
+.env
+.env.*
+*.log
+.DS_Store
+impute_shards/
+hf_staging/
+*.npz
+
+# Weights (hosted on Hugging Face)
+imputator_ssl/checkpoints/**/*.pth
+
+# Local HLS paths (data on Hub / cluster storage)
+/intelnvme*/

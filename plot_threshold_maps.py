@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
-"""Median maps for the 15% and 50% amplitude-threshold dates."""
+"""Median maps for amplitude-threshold dates.
+
+The season used from here on is SOS at 15% of the green-up amplitude and
+EOS at 50% of the senescence amplitude.
+"""
 from __future__ import annotations
 
 import json
@@ -88,8 +92,32 @@ def draw(path: Path, mapped: dict, smooth: str, title: str, scales: list) -> Non
     print(f"wrote {path}  n={shown} sos={med_sos:.1f} eos={med_eos:.1f} length={med_len:.1f}", flush=True)
 
 
+def adopted_pair(dates: dict[str, np.ndarray]) -> tuple[np.ndarray, np.ndarray]:
+    """SOS at 15% of the rise, EOS at 50% of the decline."""
+    sos = np.array(dates["sos15"], np.float32, copy=True)
+    eos = np.array(dates["eos50"], np.float32, copy=True)
+    bad = np.isfinite(sos) & np.isfinite(eos) & (eos <= sos + 30.0)
+    sos[bad] = np.nan
+    eos[bad] = np.nan
+    return sos, eos
+
+
 def main() -> None:
     row, col, dates, smooth = load()
+    sos, eos = adopted_pair(dates)
+    adopted = grids(row, col, sos, eos)
+    draw(
+        FIG / "phenology_maps_sos15_eos50_sl122_evi.png",
+        adopted,
+        smooth,
+        "Hong Kong, 122-day fill, EVI. SOS at 15% of green-up, EOS at 50% of senescence",
+        [
+            ("viridis", 60, 140, "Median SOS, 15% of green-up", "Day of year"),
+            ("cividis", 240, 340, "Median EOS, 50% of senescence", "Day of year"),
+            ("YlGn", 140, 260, "Median season length", "Days"),
+            ("Blues", 0, 11, "Years with both dates", "Years, 2015–2025"),
+        ],
+    )
     g15 = grids(row, col, dates["sos15"], dates["eos15"])
     g50 = grids(row, col, dates["sos50"], dates["eos50"])
     draw(

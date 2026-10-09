@@ -47,7 +47,7 @@ hk_phenology/
    - Point nc: `phenology_hplm.py --smooth sg9`
 5. **Drivers**: `analyze_drivers.py`
 
-Cluster data root (not in Git): `/intelnvme03/ziyun218/hls_49QHE_hk/`
+Data root resolution: `HK_DATA_ROOT`, otherwise `<repo>/data` when `meta.json` is present, otherwise the original cluster path `/intelnvme03/ziyun218/hls_49QHE_hk/`. Hub files in `data/` and `*.pth` weights are gitignored.
 
 ## Training the Imputator (HK-only)
 

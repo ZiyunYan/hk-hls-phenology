@@ -1,10 +1,22 @@
 #!/usr/bin/env bash
 # Train 1-year (122) and 2-year (244) window imputators; same recipe as topk5_s1 @ 366.
 set -euo pipefail
-PY=/home/ziyun218/.conda/envs/timesfm/bin/python
-ROOT=/home/ziyun218/pyprojects/hk_phenology/imputator_ssl
-DATA=/intelnvme03/ziyun218/hls_49QHE_hk/imputator_hk
-LOGDIR=/intelnvme03/ziyun218/hls_49QHE_hk/phenology/train_logs
+REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+export HK_DATA_ROOT="${HK_DATA_ROOT:-$REPO/data}"
+if [[ -z "${PY:-}" ]]; then
+  if [[ -n "${CONDA_PREFIX:-}" && -x "$CONDA_PREFIX/bin/python" ]]; then
+    PY="$CONDA_PREFIX/bin/python"
+  elif [[ -x "$HOME/miniconda3/envs/timesfm/bin/python" ]]; then
+    PY="$HOME/miniconda3/envs/timesfm/bin/python"
+  elif [[ -x "$HOME/.conda/envs/timesfm/bin/python" ]]; then
+    PY="$HOME/.conda/envs/timesfm/bin/python"
+  else
+    PY=python3
+  fi
+fi
+ROOT="$REPO/imputator_ssl"
+DATA="$HK_DATA_ROOT/imputator_hk"
+LOGDIR="$HK_DATA_ROOT/phenology/train_logs"
 mkdir -p "$LOGDIR"
 
 run_one() {

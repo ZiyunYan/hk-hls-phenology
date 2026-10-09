@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Preview a 60-day EVI despike on the same 90 pixels.
+"""Preview the locked 90-day EVI despike on the same 90 pixels.
 
 Red crosses sit more than 0.1 EVI above both neighbors. Orange crosses sit
-more than 0.1 below. The neighbor gap is under 60 days. The cube is unchanged.
+more than 0.1 below. The neighbor gap is under 90 days. The cube is unchanged.
 """
 from __future__ import annotations
 
@@ -18,13 +18,13 @@ import numpy as np
 import pandas as pd
 from netCDF4 import Dataset
 
-from bolton_clean import _gather, _neighbor_index
+from bolton_clean import SPIKE_DELTA, SPIKE_SPAN_DAYS, _gather, _neighbor_index
 from hk_paths import PHENO
 from phenology_hplm import greenness
 from plot_evi_smooth_samples import TILE, choose_pages, load_tile
 
-SPAN = 60.0
-RISE = 0.1
+SPAN = SPIKE_SPAN_DAYS
+RISE = SPIKE_DELTA
 
 
 def evi_flags(pixels: np.ndarray, day: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
@@ -54,8 +54,8 @@ def page_plot(times, kept, up, down, rows, cols, path: Path, page: int, origin: 
         pad = 0.06 * max(hi - lo, 0.05)
         ax.set_ylim(lo - pad, hi + pad)
         ax.scatter(times, kept[i], s=11, facecolors="white", edgecolors="black", linewidths=0.4, zorder=3, label="Kept" if i == 0 else None)
-        ax.scatter(times, up[i], s=22, c="#c0392b", marker="x", linewidths=0.9, zorder=4, label="High, gap < 60 d" if i == 0 else None)
-        ax.scatter(times, down[i], s=22, c="#e67e22", marker="x", linewidths=0.9, zorder=4, label="Low, gap < 60 d" if i == 0 else None)
+        ax.scatter(times, up[i], s=22, c="#c0392b", marker="x", linewidths=0.9, zorder=4, label=f"High, gap < {SPAN:.0f} d" if i == 0 else None)
+        ax.scatter(times, down[i], s=22, c="#e67e22", marker="x", linewidths=0.9, zorder=4, label=f"Low, gap < {SPAN:.0f} d" if i == 0 else None)
         ax.set_xlim(times[0], times[-1])
         ax.grid(True, axis="y", lw=0.3, alpha=0.45)
         ax.tick_params(labelsize=8)
@@ -73,7 +73,7 @@ def page_plot(times, kept, up, down, rows, cols, path: Path, page: int, origin: 
     fig.legend(handles, labels, loc="upper right", frameon=False, fontsize=10)
     fig.suptitle(
         f"Page {page}/10    tile origin row {origin[0]}, col {origin[1]}\n"
-        "60-day EVI screen on the already cleaned spectra. Red: more than 0.1 above both neighbors.\n"
+        "90-day EVI screen on the already cleaned spectra. Red: more than 0.1 above both neighbors.\n"
         "Orange: more than 0.1 below. Axis includes every point. The cube is not changed.",
         fontsize=12,
     )
@@ -86,7 +86,7 @@ def page_plot(times, kept, up, down, rows, cols, path: Path, page: int, origin: 
 def main() -> None:
     p = argparse.ArgumentParser()
     p.add_argument("--seed", type=int, default=20261009)
-    p.add_argument("--out", type=Path, default=Path(__file__).resolve().parent / "figures/evi60_points")
+    p.add_argument("--out", type=Path, default=Path(__file__).resolve().parent / "figures/evi90_points")
     args = p.parse_args()
     pages, row, col, *_ = choose_pages(args.seed)
     src = PHENO / "veg_cube_bolton.nc"

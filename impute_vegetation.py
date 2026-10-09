@@ -23,13 +23,14 @@ sys.path.insert(0, str(SSL))
 from models.Transformer import Model  # noqa: E402
 from utils.timefeatures import time_features  # noqa: E402
 
-ROOT = Path("/intelnvme03/ziyun218/hls_49QHE_hk/phenology")
+from hk_paths import CKPT, IMPUTATOR, META_PATH, PHENO  # noqa: E402
+
+ROOT = PHENO
 SRC = ROOT / "veg_cube.nc"
 DST = ROOT / "veg_filled.nc"
 SHARD_DIR = ROOT / "impute_shards"
-CKPT = SSL / "checkpoints/HK-Imputator-optical6-topk5-s1-sl366/checkpoint.pth"
-SCALER_NC = Path("/intelnvme03/ziyun218/hls_49QHE_hk/imputator_hk/train.nc")
-META = json.loads((Path("/intelnvme03/ziyun218/hls_49QHE_hk/meta.json").read_text()))
+SCALER_NC = IMPUTATOR / "train.nc"
+META = json.loads(META_PATH.read_text())
 SEQ = 366
 STRIDE = 122
 N_YEARS = 11

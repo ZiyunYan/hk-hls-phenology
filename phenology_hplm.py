@@ -15,7 +15,7 @@ from pathlib import Path
 
 import numpy as np
 from netCDF4 import Dataset
-from numba import njit
+from numba import njit, prange
 
 from hk_paths import PHENO
 from phenology_smooth import SMOOTH_METHODS, smooth_annual
@@ -38,6 +38,32 @@ def evi2(red: np.ndarray, nir: np.ndarray) -> np.ndarray:
     red_r = np.clip(red / 10000.0, 0.0, 1.0)
     nir_r = np.clip(nir / 10000.0, 0.0, 1.0)
     return (2.5 * (nir_r - red_r) / (nir_r + 2.4 * red_r + 1.0)).astype(np.float32)
+
+
+def evi(blue: np.ndarray, red: np.ndarray, nir: np.ndarray) -> np.ndarray:
+    """Huete EVI. Reflectance = DN/10000, clipped to 0–1."""
+    blue_r = np.clip(blue / 10000.0, 0.0, 1.0)
+    red_r = np.clip(red / 10000.0, 0.0, 1.0)
+    nir_r = np.clip(nir / 10000.0, 0.0, 1.0)
+    den = nir_r + 6.0 * red_r - 7.5 * blue_r + 1.0
+    out = np.divide(
+        2.5 * (nir_r - red_r),
+        den,
+        out=np.full(red_r.shape, np.nan, np.float32),
+        where=np.abs(den) > 1e-6,
+    )
+    return out.astype(np.float32)
+
+
+def greenness(block: np.ndarray, index: str) -> np.ndarray:
+    """block (..., 6) DN in Blue, Green, Red, NIR, SWIR1, SWIR2 order."""
+    red = block[..., 2].astype(np.float32)
+    nir = block[..., 3].astype(np.float32)
+    if index == "evi2":
+        return evi2(red, nir)
+    if index == "evi":
+        return evi(block[..., 0].astype(np.float32), red, nir)
+    raise ValueError(index)
 
 
 @njit
@@ -223,6 +249,21 @@ def metrics_one_year_smoothed(smooth):
             eos = np.nan
     if np.isfinite(sos) and np.isfinite(eos) and eos <= sos + 30.0:
         return np.nan, np.nan
+    return sos, eos
+
+
+@njit(parallel=True)
+def metrics_smoothed_years(smooth):
+    """smooth (pixels, years, 122) already smoothed. Returns SOS, EOS."""
+    n = smooth.shape[0]
+    nyears = smooth.shape[1]
+    sos = np.empty((n, nyears), np.float32)
+    eos = np.empty((n, nyears), np.float32)
+    for i in prange(n):
+        for year in range(nyears):
+            s, e = metrics_one_year_smoothed(smooth[i, year])
+            sos[i, year] = s
+            eos[i, year] = e
     return sos, eos
 
 

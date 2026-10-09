@@ -1,9 +1,16 @@
 #!/usr/bin/env python3
-"""Pre-interpolation cleaning from Bolton et al. (2020), RSE 240:111685.
+"""Pre-interpolation cleaning of the 3-day composite, before any gap filling.
 
-Section 3.3.1, applied to the 3-day composite before any gap filling.
-Two tests, both required to agree with the preceding and following clear
-observations:
+The bright-anomaly test follows Bolton et al. (2020), RSE 240:111685, section
+3.3.1. The spike test keeps their 0.1 threshold and the requirement that the
+point sit beyond both neighboring clear observations, and changes three
+choices for Hong Kong:
+
+- the index is Huete EVI, not EVI2
+- spikes are removed in both directions
+- the gap between the previous and next clear observations may be up to 90 days
+
+Locked rules:
 
 1. Bright anomalies, adapted from MAJA (Hagolle et al., 2017). An observation
    is removed when its blue reflectance jumps relative to both neighbors,
@@ -15,21 +22,24 @@ observations:
 
        red(D) - red(Dnb) > 1.5 * (blue(D) - blue(Dnb))
 
-2. Negative EVI2 spikes from missed cloud shadow. With the gap between the
-   previous and next clear observations under 45 days, the point is removed
-   when it lies more than 0.1 below the time-linear interpolation and below
-   both neighbors.
+2. EVI spikes. With the previous and next clear observations less than 90 days
+   apart, the point is removed when EVI is more than 0.1 above the time-linear
+   interpolation and above both neighbors, or more than 0.1 below the
+   interpolation and below both neighbors. All six bands of that date are set
+   to missing. The flag is computed from the spectra; the spectra are what get
+   deleted.
 
-Snow filling with the 5th percentile snow-free EVI2, the cubic spline, and
-the topographic illumination correction are not applied here. Hong Kong has
-no separate snow-QA map, and Fmask snow was already set to missing in the
-composite, so the NDWI>0.5 and 5 km snow-QA screen has nothing to attach to.
+Snow filling, the cubic spline, and the topographic illumination correction
+are not applied. Hong Kong has no separate snow-QA map, and Fmask snow was
+already set to missing in the composite.
 """
 from __future__ import annotations
 
 import numpy as np
 
 BLUE, RED, NIR = 0, 2, 3
+SPIKE_SPAN_DAYS = 90.0
+SPIKE_DELTA = 0.1
 
 
 def reflectance(dn: np.ndarray) -> np.ndarray:
@@ -37,9 +47,22 @@ def reflectance(dn: np.ndarray) -> np.ndarray:
 
 
 def evi2_from_dn(red: np.ndarray, nir: np.ndarray) -> np.ndarray:
+    """EVI2, kept for the earlier gap-count scripts. The locked clean uses EVI."""
     red_r = reflectance(red)
     nir_r = reflectance(nir)
     den = nir_r + 2.4 * red_r + 1.0
+    out = np.full(red_r.shape, np.nan, np.float32)
+    ok = np.abs(den) > 1e-6
+    out[ok] = 2.5 * (nir_r[ok] - red_r[ok]) / den[ok]
+    return out
+
+
+def evi_from_dn(blue: np.ndarray, red: np.ndarray, nir: np.ndarray) -> np.ndarray:
+    """Huete EVI. Same reflectance scaling as phenology_hplm.evi."""
+    blue_r = reflectance(blue)
+    red_r = reflectance(red)
+    nir_r = reflectance(nir)
+    den = nir_r + 6.0 * red_r - 7.5 * blue_r + 1.0
     out = np.full(red_r.shape, np.nan, np.float32)
     ok = np.abs(den) > 1e-6
     out[ok] = 2.5 * (nir_r[ok] - red_r[ok]) / den[ok]
@@ -74,13 +97,14 @@ def _gather(values: np.ndarray, index: np.ndarray, empty: float) -> np.ndarray:
 def bolton_outlier_mask(cube: np.ndarray, day: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     """cube (pixels, time, 6) DN. day (time,) ordinal days.
 
-    Returns boolean masks (pixels, time) for bright anomalies and EVI2 spikes.
+    Returns boolean masks (pixels, time) for bright anomalies and EVI spikes.
     A time step is eligible only when blue, red, and NIR are all non-zero.
+    The spike mask includes both directions.
     """
     blue = reflectance(cube[:, :, BLUE])
     red = reflectance(cube[:, :, RED])
     valid = (cube[:, :, BLUE] > 0) & (cube[:, :, RED] > 0) & (cube[:, :, NIR] > 0)
-    evi = evi2_from_dn(cube[:, :, RED], cube[:, :, NIR])
+    evi = evi_from_dn(cube[:, :, BLUE], cube[:, :, RED], cube[:, :, NIR])
     evi = np.where(valid, evi, np.nan)
     prev, nxt = _neighbor_index(valid)
     has_both = (prev >= 0) & (nxt < cube.shape[1]) & valid
@@ -113,15 +137,10 @@ def bolton_outlier_mask(cube: np.ndarray, day: np.ndarray) -> tuple[np.ndarray, 
     span = day_next - day_prev
     weight = (day[None, :] - day_prev) / np.where(span > 0, span, np.nan)
     fitted = evi_prev * (1.0 - weight) + evi_next * weight
-    spike = (
-        has_both
-        & (span < 45.0)
-        & np.isfinite(fitted)
-        & ((fitted - evi) > 0.1)
-        & (evi_prev > evi)
-        & (evi_next > evi)
-    )
-    return bright_mask, spike
+    base = has_both & np.isfinite(fitted) & (span > 0) & (span < SPIKE_SPAN_DAYS)
+    down = base & ((fitted - evi) > SPIKE_DELTA) & (evi_prev > evi) & (evi_next > evi)
+    up = base & ((evi - fitted) > SPIKE_DELTA) & (evi > evi_prev) & (evi > evi_next)
+    return bright_mask, down | up
 
 
 def apply_bolton_clean(cube: np.ndarray, day: np.ndarray) -> tuple[np.ndarray, dict[str, int]]:
@@ -155,13 +174,25 @@ def _self_check() -> None:
     for step, nir in enumerate((0.40, 0.40, 0.12, 0.40, 0.40)):
         put(2, step, 0.04, 0.05, nir)
     bright, spike = bolton_outlier_mask(cube, day)
-    assert bright[0, 2] and not spike[0, 2]
+    # High blue is a bright anomaly and also an upward EVI spike.
+    assert bright[0, 2] and spike[0, 2]
     assert not bright[1].any()
     assert spike[2, 2] and not bright[2].any()
-    # Same dip, but the neighbors are 60 days apart, so the spike rule does not fire.
-    day_wide = np.array([0, 10, 40, 70, 80], np.float32)
+    # Same dip with neighbors 100 days apart stays. 90 days is the cap.
+    day_wide = np.array([0, 10, 40, 110, 120], np.float32)
     bright_w, spike_w = bolton_outlier_mask(cube, day_wide)
     assert not spike_w[2, 2]
+    # A 60-day gap is inside the locked 90-day window.
+    day_60 = np.array([0, 10, 40, 70, 80], np.float32)
+    _, spike_60 = bolton_outlier_mask(cube, day_60)
+    assert spike_60[2, 2]
+    high = np.zeros((1, 5, 6), np.int16)
+    for step, nir in enumerate((0.25, 0.25, 0.55, 0.25, 0.25)):
+        high[0, step, BLUE] = 400
+        high[0, step, RED] = 500
+        high[0, step, NIR] = int(nir * 10000)
+    _, spike_up = bolton_outlier_mask(high, day)
+    assert spike_up[0, 2]
     print("bolton_clean self-check ok")
 
 

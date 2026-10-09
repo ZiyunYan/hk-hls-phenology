@@ -16,7 +16,7 @@ import rasterio
 from rasterio.transform import Affine
 from rasterio.warp import Resampling, reproject
 
-ROOT = Path("/intelnvme03/ziyun218/hls_49QHE_hk")
+from hk_paths import DATA as ROOT
 FACTORS = ROOT / "phenology/factors30"
 LUM = ROOT / "phenology/landuse/LUMHK_RasterGrid_2024/LUM_end2024.tif"
 META = json.loads((ROOT / "meta.json").read_text())

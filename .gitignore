@@ -17,3 +17,7 @@ imputator_ssl/checkpoints/**/*.pth
 
 # Local HLS paths (data on Hub / cluster storage)
 /intelnvme*/
+
+# Hub download: ZiyunPOLYU/hk-hls-phenology
+data/
+plots/

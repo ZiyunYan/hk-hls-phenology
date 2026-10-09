@@ -2,9 +2,21 @@
 # Fastest impute: copy once, then one fill worker per GPU, merge shards.
 # For max speed, stop other jobs on GPUs 0-3 first (e.g. sl122 DDP).
 set -euo pipefail
-PY=/home/ziyun218/.conda/envs/timesfm/bin/python
-SCRIPT=/home/ziyun218/pyprojects/hk_phenology/impute_vegetation.py
-LOGDIR=/intelnvme03/ziyun218/hls_49QHE_hk/phenology/train_logs
+REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+export HK_DATA_ROOT="${HK_DATA_ROOT:-$REPO/data}"
+if [[ -z "${PY:-}" ]]; then
+  if [[ -n "${CONDA_PREFIX:-}" && -x "$CONDA_PREFIX/bin/python" ]]; then
+    PY="$CONDA_PREFIX/bin/python"
+  elif [[ -x "$HOME/miniconda3/envs/timesfm/bin/python" ]]; then
+    PY="$HOME/miniconda3/envs/timesfm/bin/python"
+  elif [[ -x "$HOME/.conda/envs/timesfm/bin/python" ]]; then
+    PY="$HOME/.conda/envs/timesfm/bin/python"
+  else
+    PY=python3
+  fi
+fi
+SCRIPT="$REPO/impute_vegetation.py"
+LOGDIR="$HK_DATA_ROOT/phenology/train_logs"
 NGPU="${NGPU:-4}"
 BATCH="${BATCH:-8192}"
 # Lower BATCH (e.g. 4096) if sharing GPUs with training.

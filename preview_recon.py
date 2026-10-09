@@ -19,13 +19,11 @@ sys.path.insert(0, str(SSL))
 from models.Transformer import Model  # noqa: E402
 from utils.timefeatures import time_features  # noqa: E402
 
-SRC = Path("/intelnvme03/ziyun218/hls_49QHE_hk/imputator_hk/test.nc")
-SCALER = Path("/intelnvme03/ziyun218/hls_49QHE_hk/imputator_hk/train.nc")
-CKPT = (
-    SSL
-    / "checkpoints/HK-Imputator-optical6-topk5-s1-sl366/checkpoint.pth"
-)
-OUT = Path("/home/ziyun218/pyprojects/Transformer4Imputation/plots/hk_recon_topk5_s1.png")
+from hk_paths import CKPT, IMPUTATOR, REPO  # noqa: E402
+
+SRC = IMPUTATOR / "test.nc"
+SCALER = IMPUTATOR / "train.nc"
+OUT = REPO / "plots/hk_recon_topk5_s1.png"
 SEQ, STRIDE, N_YEARS = 366, 122, 11
 NAMES = ["Blue", "Red", "NIR", "SWIR1"]
 BANDS = [0, 2, 3, 4]

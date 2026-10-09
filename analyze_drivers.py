@@ -16,7 +16,7 @@ from netCDF4 import Dataset
 from numba import njit
 from scipy.stats import pearsonr
 
-ROOT = Path("/intelnvme03/ziyun218/hls_49QHE_hk/phenology")
+from hk_paths import PHENO as ROOT
 PHENO = ROOT / "phenology_sos_eos.nc"
 CLIM = ROOT / "climate"
 OUT = ROOT / "analysis"

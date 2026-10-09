@@ -12,7 +12,6 @@ import json
 import os
 import time
 from concurrent.futures import ProcessPoolExecutor, as_completed
-from pathlib import Path
 
 import numpy as np
 import rasterio
@@ -20,7 +19,7 @@ from netCDF4 import Dataset
 from rasterio.transform import Affine
 from rasterio.warp import Resampling, reproject
 
-ROOT = Path("/intelnvme03/ziyun218/hls_49QHE_hk")
+from hk_paths import DATA as ROOT
 LUM_TIF = ROOT / "phenology/landuse/LUMHK_RasterGrid_2024/LUM_end2024.tif"
 OUT = ROOT / "phenology/veg_cube.nc"
 META = json.loads((ROOT / "meta.json").read_text())

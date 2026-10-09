@@ -29,9 +29,9 @@ N_PAGE = 9
 N_PAGES = 10
 
 
-def choose_pages(seed: int) -> list[tuple[tuple[int, int], np.ndarray]]:
+def choose_pages(seed: int, path: Path | None = None) -> list[tuple[tuple[int, int], np.ndarray]]:
     """Ten separated tiles, nine vegetation pixels each, mixed success."""
-    path = PHENO / "phenology_sos_eos_hk_evi.nc"
+    path = PHENO / "phenology_sos_eos_hk_evi.nc" if path is None else path
     with Dataset(path) as f:
         row = np.array(f.variables["row"][:], np.int32)
         col = np.array(f.variables["col"][:], np.int32)
@@ -75,7 +75,7 @@ def load_tile(path: Path, y0: int, x0: int) -> np.ndarray:
         return np.array(f.variables["data"][:, :, y0:y1, x0:x1], np.int16)
 
 
-def page_plot(times, obs, filled, smooth, rows, cols, sos, eos, nvalid, path: Path, page: int, origin: tuple[int, int]) -> None:
+def page_plot(times, obs, filled, smooth, rows, cols, sos, eos, nvalid, path: Path, page: int, origin: tuple[int, int], title: str) -> None:
     fig, axes = plt.subplots(3, 3, figsize=(16.5, 11.2), sharex=True)
     for i, ax in enumerate(axes.ravel()):
         ax.plot(times, filled[i], color="#9aa7b5", lw=0.7, label="Gap-filled" if i == 0 else None, zorder=2)
@@ -110,7 +110,7 @@ def page_plot(times, obs, filled, smooth, rows, cols, sos, eos, nvalid, path: Pa
     fig.legend(handles, labels, loc="upper right", frameon=False, fontsize=10)
     fig.suptitle(
         f"Page {page}/10    tile origin row {origin[0]}, col {origin[1]}\n"
-        "Hong Kong 6-band fill, EVI. Gray: filled series. Green: Savitzky–Golay window 9 "
+        f"{title} Gray: filled series. Green: Savitzky–Golay window 9 "
         "(~27 days), the curve used for SOS/EOS.\n"
         "Open circles: observations. Green ticks: SOS. Brown ticks: EOS. "
         "Years without ticks failed the logistic fit.",
@@ -126,12 +126,16 @@ def main() -> None:
     p = argparse.ArgumentParser()
     p.add_argument("--seed", type=int, default=20261009)
     p.add_argument("--out", type=Path, default=Path(__file__).resolve().parent / "figures/evi_sg9_samples")
+    p.add_argument("--raw", type=Path, default=PHENO / "veg_cube.nc")
+    p.add_argument("--filled", type=Path, default=PHENO / "veg_filled.nc")
+    p.add_argument("--pheno", type=Path, default=PHENO / "phenology_sos_eos_hk_evi.nc")
+    p.add_argument("--title", default="Hong Kong 6-band fill, EVI.")
     args = p.parse_args()
-    pages, row, col, sos, eos, nvalid = choose_pages(args.seed)
-    with Dataset(PHENO / "veg_cube.nc") as f:
+    pages, row, col, sos, eos, nvalid = choose_pages(args.seed, args.pheno)
+    with Dataset(args.raw) as f:
         times = pd.to_datetime([str(t) for t in f.variables["time"][:]], format="%Y%j")
-    raw_path = PHENO / "veg_cube.nc"
-    filled_path = PHENO / "veg_filled.nc"
+    raw_path = args.raw
+    filled_path = args.filled
     for page, (key, idxs) in enumerate(pages, start=1):
         y0, x0 = key[0] * TILE, key[1] * TILE
         rows = row[idxs] - y0
@@ -149,7 +153,7 @@ def main() -> None:
         page_plot(
             times, obs, rec, sm,
             row[idxs], col[idxs], sos[idxs], eos[idxs], nvalid[idxs],
-            out, page, (y0, x0),
+            out, page, (y0, x0), args.title,
         )
         print(f"wrote {out}", flush=True)
 

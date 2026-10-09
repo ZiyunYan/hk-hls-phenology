@@ -11,7 +11,9 @@ import time
 import urllib.request
 from pathlib import Path
 
-OUT = Path("/intelnvme03/ziyun218/hls_49QHE_hk/phenology/climate")
+from hk_paths import PHENO
+
+OUT = PHENO / "climate"
 PAGE = "https://www.hko.gov.hk/en/cis/stn.htm"
 BASE = "https://data.weather.gov.hk/weatherAPI/hko_data/csdi/dataset"
 

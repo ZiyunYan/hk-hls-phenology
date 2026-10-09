@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Download Hong Kong Observatory daily temperature, rainfall and wind.
+"""Download Hong Kong Observatory daily temperature, rainfall, wind and dew point.
 
 Station coordinates come from the Observatory station table. Files are the
 official all-year CSVs.
@@ -7,8 +7,8 @@ official all-year CSVs.
 from __future__ import annotations
 
 import re
+import subprocess
 import time
-import urllib.request
 from pathlib import Path
 
 from hk_paths import PHENO
@@ -54,6 +54,7 @@ def stations(html: str) -> list[dict]:
             "elev_m": cells[3],
             "wind": marks[0],
             "temp": marks[1],
+            "dew": marks[3],
             "rain": marks[6],
         })
     return found
@@ -63,11 +64,14 @@ def fetch(url: str, dest: Path) -> bool:
     if dest.exists() and dest.stat().st_size > 200:
         return True
     try:
-        urllib.request.urlretrieve(url, dest)
-    except Exception as exc:
-        log(f"fail {url} {exc}")
-        if dest.exists():
-            dest.unlink()
+        subprocess.run(
+            ["curl", "-fsSL", "--retry", "2", "-o", str(dest), url],
+            check=True,
+            capture_output=True,
+        )
+    except subprocess.CalledProcessError as exc:
+        log(f"fail {url} {exc.stderr.decode(errors='ignore')[:160]}")
+        dest.unlink(missing_ok=True)
         return False
     text = dest.read_text(errors="ignore")[:80]
     if "html" in text.lower() or dest.stat().st_size < 200:
@@ -78,19 +82,24 @@ def fetch(url: str, dest: Path) -> bool:
 
 def main() -> None:
     OUT.mkdir(parents=True, exist_ok=True)
-    html = urllib.request.urlopen(PAGE, timeout=60).read().decode("utf-8", "ignore")
+    html = subprocess.run(
+        ["curl", "-fsSL", "--retry", "2", PAGE],
+        check=True,
+        capture_output=True,
+    ).stdout.decode("utf-8", "ignore")
     rows = stations(html)
     log(f"stations {len(rows)}")
-    lines = ["code,name,lat,lon,elev_m,temp,rain,wind"]
+    lines = ["code,name,lat,lon,elev_m,temp,rain,wind,dew"]
     for row in rows:
         lines.append(
             f"{row['code']},{row['name'].replace(',', ' ')},{row['lat']:.6f},{row['lon']:.6f},"
-            f"{row['elev_m']},{int(row['temp'])},{int(row['rain'])},{int(row['wind'])}"
+            f"{row['elev_m']},{int(row['temp'])},{int(row['rain'])},{int(row['wind'])},{int(row['dew'])}"
         )
         for kind, flag, suffix in (
             ("temp", row["temp"], "TEMP"),
             ("rain", row["rain"], "RF"),
             ("wind", row["wind"], "WSPD"),
+            ("dew", row["dew"], "DEW"),
         ):
             if not flag:
                 continue

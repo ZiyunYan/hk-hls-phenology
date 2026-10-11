@@ -38,14 +38,17 @@ hk_phenology/
 
 ## Typical pipeline
 
-1. **Composite** (once): `composite_veg_cube.py` → `phenology/veg_cube.nc`
+The locked order is drawn in [figures/pipeline_flowchart.png](figures/pipeline_flowchart.png) and written out in [docs/PIPELINE.md](docs/PIPELINE.md). Redraw with `python pipeline.py`.
+
+1. **Composite**: `composite_veg_cube.py` → `phenology/veg_cube.nc`
 2. **Mask**: `apply_veg_mask.py` (no agriculture; stable 2018∩2024 natural vegetation)
-3. **Impute**: `run_impute_fast.sh` or `impute_vegetation.py` → `veg_filled.nc`
-4. **Phenology** (default **SG-9** smooth before Zhang HPLM):
-   - Quick try: `bash run_try_smooth.sh` (300 veg pixels, all smooth methods, ~秒级)
-   - Full grid: `phenology_from_cube.py --smooth sg9` (`--max-pixels 5000` for test)
-   - Point nc: `phenology_hplm.py --smooth sg9`
-5. **Drivers**: `analyze_drivers.py`
+3. **Train**: `train_imputator_window_ablation.sh` → sl122, sl244, sl366 checkpoints
+4. **Clean, before filling**: `apply_bolton_clean.py` → `veg_cube_bolton.nc` (Bolton bright anomalies and EVI spikes, 90-day gap)
+5. **Impute**: `impute_fast.py` → `veg_filled_sl122.nc` (also sl244 and sl366). Phenology uses **sl122**
+6. **Phenology**: `phenology_threshold.py --window 15` on EVI. SOS is 15% of green-up, EOS is 50% of senescence. Maps: `plot_threshold_maps.py`
+7. **Climate**: `download_hko.py`, then `analyze_driver_grids.py` (2/5/10 km cells, VPD included, with and without 2015)
+
+`phenology_hplm.py` / `phenology_from_cube.py` (Zhang curvature, SG9) are comparisons only.
 
 Data root resolution: `HK_DATA_ROOT`, otherwise `<repo>/data` when `meta.json` is present, otherwise the original cluster path `/intelnvme03/ziyun218/hls_49QHE_hk/`. Hub files in `data/` and `*.pth` weights are gitignored.
 

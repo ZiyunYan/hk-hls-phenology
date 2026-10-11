@@ -2,7 +2,7 @@
 
 正式结果走下面这一条。清洗在填补之前。物候用 Savitzky–Golay 窗口 15，返青取上升段振幅的 15%，休眠取下降段振幅的 50%。双 logistic 和 SG9 只做过对照。
 
-图：[figures/pipeline_flowchart.png](../figures/pipeline_flowchart.png)。重画：`python pipeline.py`。
+图：[figures/pipeline_flowchart.png](../figures/pipeline_flowchart.png)。重画：`python pipeline.py`。英文版：[PIPELINE_EN.md](PIPELINE_EN.md)。
 
 ```mermaid
 flowchart TD

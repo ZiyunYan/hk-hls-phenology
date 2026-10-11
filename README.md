@@ -38,7 +38,7 @@ hk_phenology/
 
 ## Typical pipeline
 
-The locked order is drawn in [figures/pipeline_flowchart.png](figures/pipeline_flowchart.png) and written out in [docs/PIPELINE.md](docs/PIPELINE.md). Redraw with `python pipeline.py`.
+The locked order is drawn in [figures/pipeline_flowchart.png](figures/pipeline_flowchart.png) (Chinese) and [figures/pipeline_flowchart_en.png](figures/pipeline_flowchart_en.png) (English). The write-up is [docs/PIPELINE.md](docs/PIPELINE.md) and [docs/PIPELINE_EN.md](docs/PIPELINE_EN.md). Redraw with `python pipeline.py` or `python pipeline.py --lang en`.
 
 1. **Composite**: `composite_veg_cube.py` → `phenology/veg_cube.nc`
 2. **Mask**: `apply_veg_mask.py` (no agriculture; stable 2018∩2024 natural vegetation)

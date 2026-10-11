@@ -21,6 +21,7 @@ from matplotlib.patches import FancyArrowPatch, FancyBboxPatch
 
 ROOT = Path(__file__).resolve().parent
 DEFAULT_OUT = ROOT / "figures" / "pipeline_flowchart.png"
+DEFAULT_OUT_EN = ROOT / "figures" / "pipeline_flowchart_en.png"
 FONT_CANDIDATES = (
     Path("/tmp/NotoSansSC-Regular.otf"),
     Path("/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc"),
@@ -335,6 +336,217 @@ def render(path: Path, font: font_manager.FontProperties) -> None:
     plt.close(fig)
 
 
+def render_en(path: Path) -> None:
+    """English copy of the locked flowchart. Layout matches the Chinese figure."""
+    font = font_manager.FontProperties(family="DejaVu Sans")
+    fig_w, fig_h = 16.4, 23.6
+    fig, ax = plt.subplots(figsize=(fig_w, fig_h), dpi=140)
+    ax.set_xlim(0, fig_w)
+    ax.set_ylim(0, fig_h)
+    ax.axis("off")
+    fig.patch.set_facecolor("white")
+
+    ax.text(
+        0.4, 23.25, "Hong Kong HLS phenology pipeline",
+        fontproperties=font, fontsize=22, color="#1a1a1a", fontweight="bold", va="top",
+    )
+    ax.text(
+        0.4, 22.72,
+        "Tile 49QHE   ·   2015–2025   ·   30 m   ·   Published dates: sl122 fill, SG15, SOS 15%, EOS 50%",
+        fontproperties=font, fontsize=11, color="#444444", va="top",
+    )
+
+    band(ax, 0.28, 20.15, 15.85, 2.35, "#f4f7fb")
+    ax.text(0.45, 22.28, "1   Download", fontproperties=font, fontsize=13, color="#24598a", fontweight="bold", va="top")
+    box(
+        ax, 0.45, 20.32, 4.95, 1.82, "#e8f1fb", "#24598a",
+        "HLS scenes",
+        [
+            "L30 and S30, tile 49QHE",
+            "About 1,141 scenes, cloud ≤ 90%",
+            "Composite keeps 2015–2025",
+            "granules/*.npz",
+            "also granules.json, meta.json",
+        ],
+        font, title_size=11.5, body_size=8.4,
+    )
+    box(
+        ax, 5.6, 20.32, 4.95, 1.82, "#e8f1fb", "#24598a",
+        "Land use",
+        [
+            "Planning Dept. LUM, 2018 and 2024",
+            "Native grid about 10 m",
+            "Majority class on the 30 m grid",
+            "Cropland and urban feed the mask",
+        ],
+        font, title_size=11.5, body_size=8.4,
+    )
+    box(
+        ax, 10.75, 20.32, 5.15, 1.82, "#e8f1fb", "#24598a",
+        "HKO climate   download_hko.py",
+        [
+            "Station list from the HKO page",
+            "Daily temperature, rain, wind, dew point",
+            "climate/daily_*_ALL.csv",
+            "climate/stations.csv",
+            "Joined again at step 6",
+        ],
+        font, title_size=11, body_size=8.4,
+    )
+
+    band(ax, 0.28, 16.55, 15.85, 3.35, "#f3faf8")
+    ax.text(0.45, 19.68, "2   Composite and mask", fontproperties=font, fontsize=13, color="#1d6b5c", fontweight="bold", va="top")
+    box(
+        ax, 0.45, 16.72, 7.55, 2.78, "#e7f6f2", "#1d6b5c",
+        "3-day composite   composite_veg_cube.py",
+        [
+            "Drop cloud, shadow, cirrus, water, and snow per scene",
+            "Drop |z| ≥ 4 on the six optical bands, using the HK mean",
+            "Bands: Blue, Green, Red, NIR, SWIR1, SWIR2",
+            "Reflectance × 10000 as int16; 0 means missing",
+            "Median of clear observations every 3 days; 122 steps per year",
+            "2015–2025: 11 years, 1,342 time steps",
+            "Grid 1830 × 1830 at 30 m, UTM zone 49N",
+            "Output  data/phenology/veg_cube.nc",
+        ],
+        font, title_size=11.5, body_size=8.6,
+    )
+    box(
+        ax, 8.2, 16.72, 7.7, 2.78, "#e7f6f2", "#1d6b5c",
+        "Stable natural vegetation   apply_veg_mask.py",
+        [
+            "Drop cropland (land-use code 61)",
+            "Keep woodland, shrub, grassland, mangrove (71–74)",
+            "Both 2018 and 2024 must be natural vegetation",
+            "Neither year may be urban",
+            "Rejected pixels are set to 0 for the whole series",
+            "About 750,000 pixels go on to cleaning and fill",
+            "Mask is written back to vegetation in veg_cube.nc",
+        ],
+        font, title_size=11.5, body_size=8.6,
+    )
+
+    band(ax, 0.28, 12.15, 7.75, 4.15, "#f8f4fb")
+    band(ax, 8.2, 12.15, 7.93, 4.15, "#fff8ef")
+    ax.text(0.45, 16.08, "3a   Train", fontproperties=font, fontsize=13, color="#5e348e", fontweight="bold", va="top")
+    ax.text(8.38, 16.08, "3b   Clean before filling", fontproperties=font, fontsize=13, color="#a86b12", fontweight="bold", va="top")
+    box(
+        ax, 0.45, 12.32, 7.4, 3.55, "#f3eaf8", "#5e348e",
+        "Three windows   run.py",
+        [
+            "Training pixels: imputator_hk/train.nc",
+            "About 37,500 train pixels; test.nc holds about 4,700",
+            "Launcher: train_imputator_window_ablation.sh",
+            "Transformer: 256-d, 8 heads, 6 layers, FFN 1024",
+            "Mask 80% of time steps and reconstruct with MSE",
+            "Drop the 5 worst steps in each sequence",
+            "Second-difference smooth, weight 1",
+            "seq_len = 122, 244, or 366 (about 1, 2, or 3 years)",
+            "Weights under imputator_ssl/checkpoints/",
+            "sl122: one year in, one year out",
+            "sl244: two years in, two years out",
+            "sl366: three-year context, write the middle year",
+        ],
+        font, title_size=11.5, body_size=8.3,
+    )
+    box(
+        ax, 8.38, 12.32, 7.55, 3.55, "#fff4e5", "#a86b12",
+        "Bright anomalies and EVI spikes   bolton_clean.py",
+        [
+            "Entry point: apply_bolton_clean.py",
+            "Runs on the composite, before any gap filling",
+            "Bright test follows Bolton et al. (2020)",
+            "Drop a date if blue rises against both clear neighbors",
+            "Keep it if the red rise is larger: treat as vegetation change",
+            "EVI spike: clear neighbors at most 90 days apart",
+            "Drop if EVI is more than 0.1 off the linear bridge, either way",
+            "All six bands of that date are set back to missing (0)",
+            "No snow fill, no spline, no topographic correction",
+            "Output  veg_cube_bolton.nc",
+        ],
+        font, title_size=11, body_size=8.3,
+    )
+
+    band(ax, 0.28, 8.85, 15.85, 3.05, "#f3faf3")
+    ax.text(0.45, 11.68, "4   Gap filling", fontproperties=font, fontsize=13, color="#246b32", fontweight="bold", va="top")
+    box(
+        ax, 0.45, 9.02, 15.5, 2.48, "#e8f6ea", "#246b32",
+        "One filled cube per model   impute_fast.py",
+        [
+            "compare_impute_windows.py scores sl122, sl244, and sl366 on held-out steps first",
+            "Input is the cleaned cube veg_cube_bolton.nc plus the matching checkpoint",
+            "Only missing steps (DN = 0) are replaced. Clear observations stay as they are",
+            "sl122: one forward pass per year of 122 steps, 11 passes in all",
+            "sl244: one pass per two-year block; the last year, after step 1220, uses sl122",
+            "sl366: each pass sees 366 steps. End years align to the series; interior years keep the middle 122",
+            "Outputs: veg_filled_sl122.nc, veg_filled_sl244.nc, veg_filled_sl366.nc",
+            "Phenology uses sl122. The SG9 curvature dates at the end of submit_impute_windows.sh are a comparison only",
+        ],
+        font, title_size=11.5, body_size=8.5,
+    )
+
+    band(ax, 0.28, 5.15, 15.85, 3.45, "#fbf8ef")
+    ax.text(0.45, 8.38, "5   Phenology", fontproperties=font, fontsize=13, color="#8a6a10", fontweight="bold", va="top")
+    box(
+        ax, 0.45, 5.32, 15.5, 2.88, "#fff8e8", "#8a6a10",
+        "Amplitude thresholds   phenology_threshold.py",
+        [
+            "Input veg_filled_sl122.nc. Index is Huete EVI, split by calendar year",
+            "Each year is smoothed with Savitzky–Golay, window 15 (about 45 days), polynomial order 2",
+            "SG9 (about 27 days) crosses 15% more than once on the rise. Double logistic fits are unstable. Neither is used",
+            "The year is split at the smoothed peak. SOS is the first rise through 15% of the green-up amplitude",
+            "EOS is the first drop through 50% of the senescence amplitude. Dates are interpolated between 3-day samples",
+            "A year is dropped if amplitude < 0.04, valid steps < 12, or season length < 30 days",
+            "The 50% rise and the 15% drop are stored too. The published season pairs SOS 15% with EOS 50%",
+            "Output phenology_threshold_sl122_evi.nc. Maps from plot_threshold_maps.py",
+            "About 750,000 pixels have at least 3 valid years. Medians: SOS day 95, EOS day 302, length 212 days",
+        ],
+        font, title_size=11.5, body_size=8.4,
+    )
+
+    band(ax, 0.28, 0.95, 15.85, 3.95, "#f4f6fc")
+    ax.text(0.45, 4.68, "6   Climate and phenology", fontproperties=font, fontsize=13, color="#303f9f", fontweight="bold", va="top")
+    box(
+        ax, 0.45, 1.12, 15.5, 3.38, "#eef1fb", "#303f9f",
+        "Grid lags   analyze_driver_grids.py",
+        [
+            "Dates stay on the 30 m pixels, then each 2, 5, and 10 km cell stores the mean and the within-cell standard deviation",
+            "Temperature, rain, wind, and dew point are inverse-distance weighted to the cell center, not to every 30 m pixel",
+            "Station spacing is about 2.8 km for temperature, 3.6 km for VPD, 4.0 km for rain, and 5.0 km for wind",
+            "VPD = es(temperature) − es(dew point), Tetens, in kPa, computed at the station before interpolation",
+            "The reported correlations use fixed seasons: March–May for SOS, June–August and September–November for EOS",
+            "30, 60, and 90 days before the date were also scored. Those windows move with the date, so an early EOS falls in a warmer period. They are not the main result",
+            "Two year sets: 2015–2025, and 2016–2025 with the weaker first Sentinel-2 year left out",
+            "Territory correlations at 5 km and 10 km match the 2 km grid",
+            "Figures: figures/driver_lag_correlations.png, phenology_yearly_sos15_eos50.png",
+            "Tables: figures/driver_lag_correlations.csv, phenology_yearly_sos15_eos50.csv",
+        ],
+        font, title_size=11.5, body_size=8.4,
+    )
+
+    ax.text(
+        0.45, 0.72,
+        "Curvature dates from phenology_hplm.py and phenology_from_cube.py were used only to compare landmarks. Cubes and weights stay out of Git; figures and scripts are in the repo.",
+        fontproperties=font, fontsize=8.4, color="#555555", va="top",
+    )
+
+    arrow(ax, 2.9, 20.32, 4.2, 19.50)
+    arrow(ax, 8.05, 20.32, 12.0, 19.50)
+    arrow(ax, 4.2, 16.72, 4.15, 15.87)
+    arrow(ax, 12.0, 16.72, 12.15, 15.87)
+    arrow(ax, 4.15, 12.32, 6.4, 11.50)
+    arrow(ax, 12.15, 12.32, 10.2, 11.50)
+    arrow(ax, 8.2, 9.02, 8.2, 8.20)
+    arrow(ax, 8.2, 5.32, 8.2, 4.50)
+    ax.plot([15.55, 15.95, 15.95], [20.32, 20.32, 4.55], color="#24598a", lw=1.15, zorder=1)
+    arrow(ax, 15.95, 4.55, 15.55, 4.55, color="#24598a")
+    ax.text(16.08, 12.4, "climate", fontproperties=font, fontsize=8, color="#24598a", va="center", ha="center", rotation=90)
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(path, dpi=140, bbox_inches="tight", facecolor="white")
+    plt.close(fig)
+
+
 def print_steps() -> None:
     print("锁定流程。清洗在填补之前；正式物候不用双 logistic，也不用 SG9。")
     for step in STEPS:
@@ -345,14 +557,20 @@ def print_steps() -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--out", type=Path, default=DEFAULT_OUT)
+    parser.add_argument("--lang", choices=("zh", "en", "both"), default="zh")
+    parser.add_argument("--out", type=Path, default=None, help="Output path. Used only for a single language.")
     parser.add_argument("--print", dest="do_print", action="store_true")
     args = parser.parse_args()
     if args.do_print:
         print_steps()
-    font = load_font()
-    render(args.out, font)
-    print(f"wrote {args.out}")
+    if args.lang in ("zh", "both"):
+        out = args.out if args.lang == "zh" and args.out else DEFAULT_OUT
+        render(out, load_font())
+        print(f"wrote {out}")
+    if args.lang in ("en", "both"):
+        out = args.out if args.lang == "en" and args.out else DEFAULT_OUT_EN
+        render_en(out)
+        print(f"wrote {out}")
 
 
 if __name__ == "__main__":

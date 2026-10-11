@@ -14,6 +14,7 @@ import numpy as np
 from cube_io import load_veg_pixels
 from hk_paths import PHENO
 from phenology_hplm import N_YEARS, STEPS, YEAR0
+from plot_style import use_arial, year_stats_table
 
 BLUE, RED, NIR = 0, 2, 3
 MAX_PER_YEAR = STEPS  # 122
@@ -51,6 +52,7 @@ def main() -> None:
         default=Path(__file__).resolve().parent / "figures/valid_obs_per_year_n2000.png",
     )
     args = p.parse_args()
+    use_arial()
 
     yy, xx, data = load_veg_pixels(args.n, args.seed, src=args.src)
     n_time = data.shape[1]
@@ -75,37 +77,45 @@ def main() -> None:
             f"{np.median(c):6.1f}  {np.percentile(c, 25):5.1f}  {np.percentile(c, 75):5.1f}"
         )
 
-    fig, ax = plt.subplots(figsize=(10, 5))
+    fig = plt.figure(figsize=(11, 5.8))
+    ax = fig.add_axes([0.08, 0.28, 0.9, 0.62])
     bp = ax.boxplot(
         [counts[:, i] for i in range(N_YEARS)],
         tick_labels=[str(y) for y in years],
         showfliers=False,
         patch_artist=True,
+        widths=0.55,
     )
     for patch in bp["boxes"]:
         patch.set_facecolor("#c5dff0")
         patch.set_edgecolor("#1f4e79")
-    ax.axhline(MAX_PER_YEAR, color="#c0392b", ls="--", lw=1, label=f"theoretical max ({MAX_PER_YEAR})")
+        patch.set_linewidth(0.9)
+    for med in bp["medians"]:
+        med.set_color("#1f4e79")
+        med.set_linewidth(1.2)
+    ax.axhline(
+        MAX_PER_YEAR,
+        color="#c0392b",
+        ls="--",
+        lw=1,
+        label=f"Theoretical max ({MAX_PER_YEAR} bins yr$^{-1}$)",
+    )
     ax.set_xlabel("Year")
     ax.set_ylabel("Valid 3-day composites per pixel")
     ax.set_title(
-        f"Hong Kong stable vegetation (n={counts.shape[0]}, seed={args.seed})\n"
-        f"valid if {args.rule} bands DN≠0 · 3-day steps · max {MAX_PER_YEAR}/yr"
+        f"Hong Kong stable vegetation ($n$={counts.shape[0]}, seed={args.seed})\n"
+        f"EVI bands DN$\\neq$0 · 3-day steps"
     )
-    ax.legend(loc="lower right")
-    ax.set_ylim(0, MAX_PER_YEAR + 5)
-    for i, yr in enumerate(years):
-        ax.text(
-            i + 1,
-            MAX_PER_YEAR + 2,
-            f"μ={means[i]:.1f}\nσ={stds[i]:.1f}",
-            ha="center",
-            va="bottom",
-            fontsize=7,
-        )
-    fig.tight_layout()
+    ax.set_ylim(0, MAX_PER_YEAR + 8)
+    ax.legend(loc="upper right", framealpha=0.95)
+    ax.grid(axis="y", alpha=0.25, linewidth=0.6)
+    plt.setp(ax.get_xticklabels(), rotation=45, ha="right")
+
+    year_stats_table(fig, years, means, stds)
+
     args.out.parent.mkdir(parents=True, exist_ok=True)
-    fig.savefig(args.out, dpi=150)
+    fig.savefig(args.out, dpi=150, bbox_inches="tight", facecolor="white")
+    plt.close(fig)
     print(f"wrote {args.out}")
 
 

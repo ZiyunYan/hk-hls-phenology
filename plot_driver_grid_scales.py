@@ -40,12 +40,11 @@ from analyze_driver_grids import TO_LL
 ROOT = Path(__file__).resolve().parent
 FIG = ROOT / "figures"
 PHENO = ROOT / "data" / "phenology" / "phenology_threshold_sl122_evi.nc"
-FONT = Path("/tmp/NotoSansSC-Regular.otf")
 GRIDS = (10000, 5000, 2000, 1000)
 PAIRS = (
-    ("vpd_mam", "sos", "3–5 月水汽压差与返青", "水汽压差 (kPa)", "返青（日序）"),
-    ("temp_son", "eos", "9–11 月气温与休眠", "气温 (°C)", "休眠（日序）"),
-    ("temp_jja", "eos", "6–8 月气温与休眠", "气温 (°C)", "休眠（日序）"),
+    ("vpd_mam", "sos", "Mar–May VPD and green-up", "VPD (kPa)", "Green-up (day)"),
+    ("temp_son", "eos", "Sep–Nov temperature and dormancy", "Temperature (°C)", "Dormancy (day)"),
+    ("temp_jja", "eos", "Jun–Aug temperature and dormancy", "Temperature (°C)", "Dormancy (day)"),
 )
 
 
@@ -166,53 +165,56 @@ def corr(x: np.ndarray, y: np.ndarray) -> tuple[float, float, int]:
 
 
 def draw(bundles: dict, path: Path) -> None:
-    font = font_manager.FontProperties(fname=str(FONT)) if FONT.is_file() else font_manager.FontProperties(family="DejaVu Sans")
-    columns = [("hk", "全港")] + [(grid, f"{grid // 1000} 公里") for grid in GRIDS]
-    fig, axes = plt.subplots(len(PAIRS), len(columns), figsize=(15.6, 9.6), dpi=130)
-    fig.subplots_adjust(left=0.07, right=0.985, top=0.90, bottom=0.08, hspace=0.42, wspace=0.28)
+    from plot_style import arial, use_arial
+    use_arial()
+    font = arial(9)
+    letter_font = arial(13)
+    columns = [("hk", "Hong Kong")] + [(grid, f"{grid // 1000} km") for grid in GRIDS]
+    ylabels = ("Green-up (day)", "Dormancy (day)", "Dormancy (day)")
+    xlabels = ("Spring VPD (kPa)", "Autumn temperature (°C)", "Summer temperature (°C)")
+    letters = ("a", "b", "c")
+    fig, axes = plt.subplots(len(PAIRS), len(columns), figsize=(15.6, 10.2), dpi=130)
+    fig.subplots_adjust(left=0.09, right=0.985, top=0.95, bottom=0.08, hspace=0.62, wspace=0.30)
+    year_list = None
     for row, (xname, yname, title, xlabel, ylabel) in enumerate(PAIRS):
+        del title, xlabel, ylabel
         for col, (key, label) in enumerate(columns):
             ax = axes[row, col]
             pack = bundles[(key, xname, yname)]
             years = pack["year"]
             x = pack["x"]
             y = pack["y"]
-            if key == "hk":
-                ax.scatter(x, y, s=28, color="#1f4e79", zorder=3)
-                for year, xv, yv in zip(years, x, y):
-                    ax.annotate(str(int(year)), (xv, yv), textcoords="offset points", xytext=(3, 3), fontsize=6.5, color="#444444")
-            else:
-                cmap = plt.colormaps["viridis"].resampled(len(np.unique(years)))
-                for i, year in enumerate(sorted(np.unique(years))):
-                    take = years == year
-                    ax.scatter(x[take], y[take], s=8, color=cmap(i), alpha=0.45, linewidths=0, zorder=2, label=str(int(year)) if row == 0 and col == 1 else None)
+            year_list = sorted(np.unique(years))
+            cmap = plt.colormaps["viridis"].resampled(len(year_list))
+            for i, year in enumerate(year_list):
+                take = years == year
+                ax.scatter(
+                    x[take], y[take], s=22 if key == "hk" else 8,
+                    color=cmap(i), alpha=0.9 if key == "hk" else 0.4,
+                    linewidths=0, zorder=2,
+                    label=str(int(year)) if row == 0 and col == 0 else None,
+                )
             if x.size >= 2 and np.std(x) > 0:
                 slope, intercept = np.polyfit(x, y, 1)
                 xs = np.linspace(np.min(x), np.max(x), 40)
-                ax.plot(xs, intercept + slope * xs, color="#1f4e79", lw=1.3, zorder=3)
-            heading = f"{title}\n{label}   n = {pack['n']}" if col == 0 else f"{label}   n = {pack['n']}"
-            ax.set_title(heading, fontproperties=font, fontsize=10, loc="left")
-            if row == len(PAIRS) - 1:
-                ax.set_xlabel(xlabel, fontproperties=font, fontsize=9)
+                ax.plot(xs, intercept + slope * xs, color="#333333", lw=1.2, zorder=3)
+            ax.set_title(f"{label}   r = {pack['r']:+.2f}", fontproperties=font, fontsize=9, color="black")
+            ax.set_xlabel(xlabels[row], fontproperties=font, fontsize=8, color="black")
             if col == 0:
-                ax.set_ylabel(ylabel, fontproperties=font, fontsize=9)
-            note = f"r = {pack['r']:+.2f}"
-            if key != "hk":
-                note += f"\n格内距平 r = {pack['anomaly_r']:+.2f}"
-            ax.text(
-                0.04, 0.96, note, transform=ax.transAxes, va="top", ha="left",
-                fontsize=8, fontproperties=font,
-                bbox={"boxstyle": "round,pad=0.2", "fc": "white", "ec": "none", "alpha": 0.88},
-            )
-            ax.tick_params(labelsize=7)
-    fig.suptitle(
-        "从全港一个值降到 1 公里格网。细格网上每个点是一个格子的一年，颜色是年份。",
-        fontproperties=font, fontsize=13, x=0.06, ha="left",
-    )
-    handles, labels = axes[0, 1].get_legend_handles_labels()
-    fig.legend(handles, labels, loc="lower center", ncol=11, frameon=False, fontsize=8, bbox_to_anchor=(0.52, 0.005))
+                ax.set_ylabel(ylabels[row], fontproperties=font, fontsize=8, color="black")
+                ax.text(
+                    0.0, 1.22, f"({letters[row]})",
+                    transform=ax.transAxes,
+                    ha="left", va="bottom",
+                    fontproperties=letter_font,
+                    color="black",
+                    clip_on=False,
+                )
+            ax.tick_params(labelsize=7, colors="black")
+    handles, labels = axes[0, 0].get_legend_handles_labels()
+    fig.legend(handles, labels, loc="lower center", ncol=11, frameon=False, fontsize=8, bbox_to_anchor=(0.5, 0.005))
     path.parent.mkdir(parents=True, exist_ok=True)
-    fig.savefig(path, dpi=130)
+    fig.savefig(path, dpi=130, bbox_inches="tight", facecolor="white")
     plt.close(fig)
 
 
@@ -269,9 +271,9 @@ def main() -> None:
     table = pd.DataFrame(rows)
     table_path = FIG / "driver_grid_scale_correlations.csv"
     table.to_csv(table_path, index=False)
-    out = FIG / "driver_grid_scale_scatters.png"
-    draw(bundles, out)
-    print(f"wrote {out}")
+    final = FIG / "final" / "driver_grid_scale_scatters.png"
+    draw(bundles, final)
+    print(f"wrote {final}")
     print(f"wrote {table_path}")
 
 

@@ -167,14 +167,18 @@ def corr(x: np.ndarray, y: np.ndarray) -> tuple[float, float, int]:
 def draw(bundles: dict, path: Path) -> None:
     from plot_style import arial, use_arial
     use_arial()
-    font = arial(9)
-    letter_font = arial(13)
+    font = arial(12)
+    letter_font = arial(14)
     columns = [("hk", "Hong Kong")] + [(grid, f"{grid // 1000} km") for grid in GRIDS]
     ylabels = ("Green-up (day)", "Dormancy (day)", "Dormancy (day)")
     xlabels = ("Spring VPD (kPa)", "Autumn temperature (°C)", "Summer temperature (°C)")
-    letters = ("a", "b", "c")
-    fig, axes = plt.subplots(len(PAIRS), len(columns), figsize=(15.6, 10.2), dpi=130)
-    fig.subplots_adjust(left=0.09, right=0.985, top=0.95, bottom=0.08, hspace=0.62, wspace=0.30)
+    captions = (
+        "(a)  Green-up and spring VPD",
+        "(b)  Dormancy and autumn temperature",
+        "(c)  Dormancy and summer temperature",
+    )
+    fig, axes = plt.subplots(len(PAIRS), len(columns), figsize=(16.4, 11.4), dpi=130)
+    fig.subplots_adjust(left=0.08, right=0.985, top=0.95, bottom=0.08, hspace=0.72, wspace=0.32)
     year_list = None
     for row, (xname, yname, title, xlabel, ylabel) in enumerate(PAIRS):
         del title, xlabel, ylabel
@@ -197,22 +201,22 @@ def draw(bundles: dict, path: Path) -> None:
             if x.size >= 2 and np.std(x) > 0:
                 slope, intercept = np.polyfit(x, y, 1)
                 xs = np.linspace(np.min(x), np.max(x), 40)
-                ax.plot(xs, intercept + slope * xs, color="#333333", lw=1.2, zorder=3)
-            ax.set_title(f"{label}   r = {pack['r']:+.2f}", fontproperties=font, fontsize=9, color="black")
-            ax.set_xlabel(xlabels[row], fontproperties=font, fontsize=8, color="black")
+                ax.plot(xs, intercept + slope * xs, color="#333333", lw=1.3, zorder=3)
+            ax.set_title(f"{label}   r = {pack['r']:+.2f}", fontproperties=font, fontsize=12, color="black", pad=8)
+            ax.set_xlabel(xlabels[row], fontproperties=font, fontsize=12, color="black")
             if col == 0:
-                ax.set_ylabel(ylabels[row], fontproperties=font, fontsize=8, color="black")
+                ax.set_ylabel(ylabels[row], fontproperties=font, fontsize=12, color="black")
                 ax.text(
-                    0.0, 1.22, f"({letters[row]})",
+                    0.0, 1.28, captions[row],
                     transform=ax.transAxes,
                     ha="left", va="bottom",
                     fontproperties=letter_font,
                     color="black",
                     clip_on=False,
                 )
-            ax.tick_params(labelsize=7, colors="black")
+            ax.tick_params(labelsize=10, colors="black")
     handles, labels = axes[0, 0].get_legend_handles_labels()
-    fig.legend(handles, labels, loc="lower center", ncol=11, frameon=False, fontsize=8, bbox_to_anchor=(0.5, 0.005))
+    fig.legend(handles, labels, loc="lower center", ncol=11, frameon=False, prop=arial(11), bbox_to_anchor=(0.5, 0.005))
     path.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(path, dpi=130, bbox_inches="tight", facecolor="white")
     plt.close(fig)

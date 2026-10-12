@@ -37,13 +37,20 @@ def arial(size: float = 10) -> font_manager.FontProperties:
     return font_manager.FontProperties(fname=str(ARIAL), size=size)
 
 
-def annotate_years(ax, years, xs, ys, *, size: float = 7.5, colors=None, forbidden=()) -> None:
+def annotate_years(ax, years, xs, ys, *, size: float = 7.5, colors=None, forbidden=(), inside: bool = False) -> None:
     """Label each year beside its point. Nearby points get a staggered stack."""
     del forbidden
     font = arial(size)
     fig = ax.figure
     fig.canvas.draw()
     disp = np.array([ax.transData.transform((float(x), float(y))) for x, y in zip(xs, ys)])
+    if inside:
+        _layout_year_labels(ax, years, xs, ys, disp, font, fig)
+        return
+    xmin, xmax = ax.get_xlim()
+    ymin, ymax = ax.get_ylim()
+    xspan = (xmax - xmin) or 1.0
+    yspan = (ymax - ymin) or 1.0
     parent = list(range(len(years)))
 
     def find(i: int) -> int:
@@ -59,21 +66,110 @@ def annotate_years(ax, years, xs, ys, *, size: float = 7.5, colors=None, forbidd
     groups: dict[int, list[int]] = {}
     for i in range(len(years)):
         groups.setdefault(find(i), []).append(i)
+    box = ax.get_window_extent()
+    point_to_px = fig.dpi / 72.0
     for members in groups.values():
         members = sorted(members, key=lambda i: disp[i, 1])
         span = (len(members) - 1) / 2
+        if inside and len(members) > 1:
+            gap = 15 * point_to_px
+            cy = float(np.mean(disp[members, 1]))
+            cx = float(np.mean(disp[members, 0]))
+            height = (len(members) - 1) * gap
+            shift = 0.0
+            if cy + height / 2 > box.y1 - 6:
+                shift -= cy + height / 2 - (box.y1 - 6)
+            if cy - height / 2 + shift < box.y0 + 6:
+                shift += box.y0 + 6 - (cy - height / 2 + shift)
+            place_left = cx > box.x0 + 0.62 * box.width
+            for k, i in enumerate(members):
+                label_y = cy - height / 2 + k * gap + shift
+                dx = -9 if place_left else 8
+                dy = (label_y - disp[i, 1]) * 72.0 / fig.dpi
+                _year_annotation(
+                    ax, years[i], xs[i], ys[i], dx, dy,
+                    ha="right" if place_left else "left",
+                    font=font,
+                    color="#333333" if colors is None else colors[i],
+                    leader=abs(dy) > 8,
+                )
+            continue
         for k, i in enumerate(members):
             color = "#333333" if colors is None else colors[i]
-            ax.annotate(
-                str(int(years[i])),
-                (xs[i], ys[i]),
-                textcoords="offset points",
-                xytext=(8, (k - span) * 12),
-                fontproperties=font,
-                color=color,
-                zorder=5,
-                annotation_clip=False,
-            )
+            dx, dy, ha = 8, (k - span) * 12, "left"
+            if inside:
+                xfrac = (float(xs[i]) - xmin) / xspan
+                yfrac = (float(ys[i]) - ymin) / yspan
+                if xfrac > 0.78:
+                    dx, ha = -8, "right"
+                if yfrac > 0.9:
+                    dy = min(dy, -2)
+                if yfrac < 0.1:
+                    dy = max(dy, 2)
+            _year_annotation(ax, years[i], xs[i], ys[i], dx, dy, ha=ha, font=font, color=color, leader=False)
+
+
+def _layout_year_labels(ax, years, xs, ys, disp, font, fig) -> None:
+    """Keep year labels inside the axes and off one another."""
+    box = ax.get_window_extent()
+    n = len(years)
+    dists = [float(np.hypot(*(disp[i] - disp[j]))) for i in range(n) for j in range(i + 1, n)]
+    crowded = bool(dists) and float(np.median(dists)) < 90
+    pos = disp.copy()
+    if crowded:
+        gap = 16.0
+        order = sorted(range(n), key=lambda i: disp[i, 1], reverse=True)
+        top = box.y1 - 12
+        for k, i in enumerate(order):
+            pos[i, 0] = box.x0 + 24
+            pos[i, 1] = top - k * gap
+            if pos[i, 1] < box.y0 + 12:
+                pos[i, 1] = box.y0 + 12
+    else:
+        tw, th = 36.0, 14.0
+        for i in range(n):
+            pos[i, 0] = disp[i, 0] + (-24 if disp[i, 0] > box.x0 + 0.72 * box.width else 22)
+        order = sorted(range(n), key=lambda i: pos[i, 1])
+        for a, i in enumerate(order):
+            for j in order[:a]:
+                if abs(pos[i, 0] - pos[j, 0]) < tw and pos[i, 1] < pos[j, 1] + th:
+                    pos[i, 1] = pos[j, 1] + th
+        pos[:, 0] = np.clip(pos[:, 0], box.x0 + 20, box.x1 - 20)
+        pos[:, 1] = np.clip(pos[:, 1], box.y0 + 10, box.y1 - 10)
+    scale = 72.0 / fig.dpi
+    for i in range(n):
+        dx = (pos[i, 0] - disp[i, 0]) * scale
+        dy = (pos[i, 1] - disp[i, 1]) * scale
+        ax.annotate(
+            str(int(years[i])),
+            (float(xs[i]), float(ys[i])),
+            textcoords="offset points",
+            xytext=(dx, dy),
+            fontproperties=font,
+            color="#222222",
+            ha="center",
+            va="center",
+            zorder=6,
+            annotation_clip=False,
+            arrowprops={"arrowstyle": "-", "color": "#9a9a9a", "lw": 0.55, "shrinkA": 4, "shrinkB": 1}
+            if crowded or abs(dx) + abs(dy) > 14 else None,
+        )
+
+
+def _year_annotation(ax, year, x, y, dx, dy, *, ha, font, color, leader: bool) -> None:
+    ax.annotate(
+        str(int(year)),
+        (x, y),
+        textcoords="offset points",
+        xytext=(dx, dy),
+        fontproperties=font,
+        color=color,
+        ha=ha,
+        va="center",
+        zorder=5,
+        annotation_clip=False,
+        arrowprops={"arrowstyle": "-", "color": "#9a9a9a", "lw": 0.6, "shrinkA": 3, "shrinkB": 1} if leader else None,
+    )
 
 
 def year_stats_table(

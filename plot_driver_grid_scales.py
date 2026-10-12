@@ -165,7 +165,7 @@ def corr(x: np.ndarray, y: np.ndarray) -> tuple[float, float, int]:
 
 
 def draw(bundles: dict, path: Path) -> None:
-    from plot_style import arial, use_arial
+    from plot_style import annotate_years, arial, use_arial
     use_arial()
     font = arial(12)
     letter_font = arial(14)
@@ -202,6 +202,8 @@ def draw(bundles: dict, path: Path) -> None:
                 slope, intercept = np.polyfit(x, y, 1)
                 xs = np.linspace(np.min(x), np.max(x), 40)
                 ax.plot(xs, intercept + slope * xs, color="#333333", lw=1.3, zorder=3)
+            if key == "hk":
+                annotate_years(ax, years, x, y, size=9, inside=True)
             ax.set_title(f"{label}   r = {pack['r']:+.2f}", fontproperties=font, fontsize=12, color="black", pad=8)
             ax.set_xlabel(xlabels[row], fontproperties=font, fontsize=12, color="black")
             if col == 0:

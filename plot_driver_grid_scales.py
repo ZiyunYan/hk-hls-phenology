@@ -193,17 +193,21 @@ def draw(bundles: dict, path: Path) -> None:
             for i, year in enumerate(year_list):
                 take = years == year
                 ax.scatter(
-                    x[take], y[take], s=22 if key == "hk" else 8,
-                    color=cmap(i), alpha=0.9 if key == "hk" else 0.4,
-                    linewidths=0, zorder=2,
+                    x[take], y[take],
+                    s=42 if key == "hk" else 13,
+                    color=cmap(i),
+                    alpha=1.0 if key == "hk" else 0.82,
+                    linewidths=0.6 if key == "hk" else 0,
+                    edgecolors="white" if key == "hk" else "none",
+                    zorder=4 if key == "hk" else 2,
                     label=str(int(year)) if row == 0 and col == 0 else None,
                 )
             if x.size >= 2 and np.std(x) > 0:
                 slope, intercept = np.polyfit(x, y, 1)
                 xs = np.linspace(np.min(x), np.max(x), 40)
-                ax.plot(xs, intercept + slope * xs, color="#333333", lw=1.3, zorder=3)
+                ax.plot(xs, intercept + slope * xs, color="#222222", lw=1.35, zorder=3)
             if key == "hk":
-                annotate_years(ax, years, x, y, size=9, inside=True)
+                annotate_years(ax, years, x, y, size=8, inside=True)
             ax.set_title(f"{label}   r = {pack['r']:+.2f}", fontproperties=font, fontsize=12, color="black", pad=8)
             ax.set_xlabel(xlabels[row], fontproperties=font, fontsize=12, color="black")
             if col == 0:

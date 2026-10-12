@@ -110,49 +110,54 @@ def annotate_years(ax, years, xs, ys, *, size: float = 7.5, colors=None, forbidd
 
 
 def _layout_year_labels(ax, years, xs, ys, disp, font, fig) -> None:
-    """Keep year labels inside the axes and off one another."""
+    """Put each year just beside its point. No leader lines."""
+    import matplotlib.patheffects as pe
+
     box = ax.get_window_extent()
     n = len(years)
-    dists = [float(np.hypot(*(disp[i] - disp[j]))) for i in range(n) for j in range(i + 1, n)]
-    crowded = bool(dists) and float(np.median(dists)) < 90
     pos = disp.copy()
-    if crowded:
-        gap = 16.0
-        order = sorted(range(n), key=lambda i: disp[i, 1], reverse=True)
-        top = box.y1 - 12
-        for k, i in enumerate(order):
-            pos[i, 0] = box.x0 + 24
-            pos[i, 1] = top - k * gap
-            if pos[i, 1] < box.y0 + 12:
-                pos[i, 1] = box.y0 + 12
-    else:
-        tw, th = 36.0, 14.0
+    ha = ["left"] * n
+    for i in range(n):
+        if disp[i, 0] > box.x0 + 0.78 * box.width:
+            pos[i, 0] = disp[i, 0] - 8
+            ha[i] = "right"
+        else:
+            pos[i, 0] = disp[i, 0] + 8
+        pos[i, 1] = disp[i, 1] + 5
+    tw, th = 16.0, 11.0
+    base = pos.copy()
+    for _ in range(50):
         for i in range(n):
-            pos[i, 0] = disp[i, 0] + (-24 if disp[i, 0] > box.x0 + 0.72 * box.width else 22)
-        order = sorted(range(n), key=lambda i: pos[i, 1])
-        for a, i in enumerate(order):
-            for j in order[:a]:
-                if abs(pos[i, 0] - pos[j, 0]) < tw and pos[i, 1] < pos[j, 1] + th:
-                    pos[i, 1] = pos[j, 1] + th
-        pos[:, 0] = np.clip(pos[:, 0], box.x0 + 20, box.x1 - 20)
-        pos[:, 1] = np.clip(pos[:, 1], box.y0 + 10, box.y1 - 10)
+            for j in range(i + 1, n):
+                dx = pos[i, 0] - pos[j, 0]
+                dy = pos[i, 1] - pos[j, 1]
+                if abs(dx) >= tw or abs(dy) >= th:
+                    continue
+                sign = 1.0 if dy > 0 else -1.0
+                if dy == 0:
+                    sign = 1.0 if i < j else -1.0
+                pos[i, 1] += sign * 1.6
+                pos[j, 1] -= sign * 1.6
+            pos[i, 1] += 0.08 * (base[i, 1] - pos[i, 1])
+            pos[i, 1] = float(np.clip(pos[i, 1], base[i, 1] - 16, base[i, 1] + 16))
+            pos[i, 1] = float(np.clip(pos[i, 1], box.y0 + 8, box.y1 - 8))
     scale = 72.0 / fig.dpi
+    stroke = [pe.withStroke(linewidth=2.4, foreground="white")]
     for i in range(n):
         dx = (pos[i, 0] - disp[i, 0]) * scale
         dy = (pos[i, 1] - disp[i, 1]) * scale
         ax.annotate(
-            str(int(years[i])),
+            str(int(years[i]))[-2:],
             (float(xs[i]), float(ys[i])),
             textcoords="offset points",
             xytext=(dx, dy),
             fontproperties=font,
-            color="#222222",
-            ha="center",
+            color="#1a1a1a",
+            ha=ha[i],
             va="center",
             zorder=6,
             annotation_clip=False,
-            arrowprops={"arrowstyle": "-", "color": "#9a9a9a", "lw": 0.55, "shrinkA": 4, "shrinkB": 1}
-            if crowded or abs(dx) + abs(dy) > 14 else None,
+            path_effects=stroke,
         )
 
 

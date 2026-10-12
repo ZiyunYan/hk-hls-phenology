@@ -177,8 +177,8 @@ def draw(bundles: dict, path: Path) -> None:
         "(b)  Dormancy and autumn temperature",
         "(c)  Dormancy and summer temperature",
     )
-    fig, axes = plt.subplots(len(PAIRS), len(columns), figsize=(16.4, 11.4), dpi=130)
-    fig.subplots_adjust(left=0.08, right=0.985, top=0.95, bottom=0.08, hspace=0.72, wspace=0.32)
+    fig, axes = plt.subplots(len(PAIRS), len(columns), figsize=(16.4, 10.2), dpi=130)
+    fig.subplots_adjust(left=0.08, right=0.985, top=0.96, bottom=0.07, hspace=0.48, wspace=0.32)
     year_list = None
     for row, (xname, yname, title, xlabel, ylabel) in enumerate(PAIRS):
         del title, xlabel, ylabel
@@ -208,12 +208,12 @@ def draw(bundles: dict, path: Path) -> None:
                 ax.plot(xs, intercept + slope * xs, color="#222222", lw=1.35, zorder=3)
             if key == "hk":
                 annotate_years(ax, years, x, y, size=8, inside=True)
-            ax.set_title(f"{label}   r = {pack['r']:+.2f}", fontproperties=font, fontsize=12, color="black", pad=8)
+            ax.set_title(f"{label}   r = {pack['r']:+.2f}", fontproperties=font, fontsize=12, color="black", pad=3)
             ax.set_xlabel(xlabels[row], fontproperties=font, fontsize=12, color="black")
             if col == 0:
                 ax.set_ylabel(ylabels[row], fontproperties=font, fontsize=12, color="black")
                 ax.text(
-                    0.0, 1.28, captions[row],
+                    0.0, 1.14, captions[row],
                     transform=ax.transAxes,
                     ha="left", va="bottom",
                     fontproperties=letter_font,

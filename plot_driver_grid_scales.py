@@ -178,7 +178,7 @@ def draw(bundles: dict, path: Path) -> None:
         "(c)  Dormancy and summer temperature",
     )
     fig, axes = plt.subplots(len(PAIRS), len(columns), figsize=(16.4, 10.2), dpi=130)
-    fig.subplots_adjust(left=0.08, right=0.985, top=0.96, bottom=0.07, hspace=0.48, wspace=0.32)
+    fig.subplots_adjust(left=0.08, right=0.985, top=0.96, bottom=0.12, hspace=0.48, wspace=0.32)
     year_list = None
     for row, (xname, yname, title, xlabel, ylabel) in enumerate(PAIRS):
         del title, xlabel, ylabel
@@ -222,7 +222,7 @@ def draw(bundles: dict, path: Path) -> None:
                 )
             ax.tick_params(labelsize=10, colors="black")
     handles, labels = axes[0, 0].get_legend_handles_labels()
-    fig.legend(handles, labels, loc="lower center", ncol=11, frameon=False, prop=arial(11), bbox_to_anchor=(0.5, 0.005))
+    fig.legend(handles, labels, loc="upper center", ncol=11, frameon=False, prop=arial(11), bbox_to_anchor=(0.5, 0.02))
     path.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(path, dpi=130, bbox_inches="tight", facecolor="white")
     plt.close(fig)

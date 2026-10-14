@@ -83,14 +83,21 @@ def map_panel(ax, image, extent, title, norm, cmap, font) -> object:
 
 
 def draw(sos_img, eos_img, extent, shares, sos_cut, eos_cut) -> None:
+    from matplotlib.lines import Line2D
+    from matplotlib.patches import Patch
+
     use_arial()
     font = arial(11)
     small = arial(10)
-    fig = plt.figure(figsize=(12.2, 8.4), layout="constrained")
-    gs = fig.add_gridspec(2, 2, width_ratios=[1.15, 1.0])
+    fig = plt.figure(figsize=(11.6, 7.5))
+    gs = fig.add_gridspec(
+        2, 2, height_ratios=[1.55, 1.0], width_ratios=[1, 1],
+        left=0.07, right=0.98, top=0.94, bottom=0.08, wspace=0.22, hspace=0.32,
+    )
     ax_sos = fig.add_subplot(gs[0, 0])
-    ax_eos = fig.add_subplot(gs[1, 0])
-    ax_bar = fig.add_subplot(gs[:, 1])
+    ax_eos = fig.add_subplot(gs[0, 1])
+    ax_bar = fig.add_subplot(gs[1, 0])
+    ax_key = fig.add_subplot(gs[1, 1])
     finite = np.concatenate([sos_img[np.isfinite(sos_img)], eos_img[np.isfinite(eos_img)]])
     vmax = float(np.ceil(np.percentile(finite, 98) / 5.0) * 5.0)
     cmap = plt.get_cmap("viridis").copy()
@@ -98,29 +105,43 @@ def draw(sos_img, eos_img, extent, shares, sos_cut, eos_cut) -> None:
     norm = Normalize(0, vmax)
     im = map_panel(ax_sos, sos_img, extent, "(a)  Green-up (15%)", norm, cmap, font)
     map_panel(ax_eos, eos_img, extent, "Dormancy (50%)", norm, cmap, font)
-    cbar = fig.colorbar(im, ax=[ax_sos, ax_eos], orientation="horizontal", fraction=0.04, pad=0.18)
-    cbar.set_label("SD (days)", fontproperties=font, fontsize=11)
-    cbar.ax.tick_params(labelsize=9)
 
     labels = [name for _code, name in COVER]
-    y = np.arange(len(labels))
-    height = 0.36
+    x = np.arange(len(labels))
+    width = 0.36
+    green = "#1b7f4e"
+    amber = "#b86e00"
     series = (
-        (shares["sos"], "#1b7f4e", f"Green-up SD ≥ {sos_cut:.0f} d"),
-        (shares["eos"], "#b86e00", f"Dormancy SD ≥ {eos_cut:.0f} d"),
+        (shares["sos"], green, f"Green-up SD ≥ {sos_cut:.0f} d"),
+        (shares["eos"], amber, f"Dormancy SD ≥ {eos_cut:.0f} d"),
     )
-    for i, (values, color, label) in enumerate(series):
-        ax_bar.barh(y + (0.5 - i) * height, 100 * values, height=height, color=color, label=label)
-    ax_bar.axvline(10, color="#666666", lw=1.0, ls="--", label="10% of all pixels")
-    ax_bar.set_yticks(y)
-    ax_bar.set_yticklabels(labels, fontproperties=small, fontsize=11)
-    ax_bar.invert_yaxis()
-    ax_bar.set_xlabel("High-SD pixels in type (%)", fontproperties=font)
+    for i, (values, color, _label) in enumerate(series):
+        ax_bar.bar(x + (i - 0.5) * width, 100 * values, width=width, color=color)
+    ax_bar.axhline(10, color="#666666", lw=1.0, ls="--")
+    ax_bar.set_xticks(x)
+    ax_bar.set_xticklabels(labels, fontproperties=small, fontsize=10)
+    ax_bar.set_ylabel("High-SD pixels in type (%)", fontproperties=font)
     top = float(np.nanmax([100 * values for values, _color, _label in series]))
-    ax_bar.set_xlim(0, max(28, np.ceil(top / 5.0) * 5.0 + 4))
+    ax_bar.set_ylim(0, max(28, np.ceil(top / 5.0) * 5.0 + 2))
     ax_bar.set_title("(b)  High-SD pixels within each type", fontproperties=font, fontsize=12, loc="left")
-    ax_bar.legend(frameon=False, prop=arial(9), loc="upper right")
     ax_bar.tick_params(labelsize=9)
+
+    ax_key.set_axis_off()
+    cax = ax_key.inset_axes([0.14, 0.74, 0.72, 0.12])
+    cbar = fig.colorbar(im, cax=cax, orientation="horizontal")
+    cbar.set_label("SD (days)", fontproperties=font, fontsize=11, labelpad=4)
+    cbar.ax.tick_params(labelsize=9)
+    handles = [
+        Line2D([0], [0], color="#666666", lw=1.2, ls="--"),
+        Patch(facecolor=green, edgecolor="none"),
+        Patch(facecolor=amber, edgecolor="none"),
+    ]
+    key_labels = ["10% of all pixels", series[0][2], series[1][2]]
+    ax_key.legend(
+        handles, key_labels, frameon=False, prop=arial(11),
+        loc="lower center", bbox_to_anchor=(0.5, 0.06),
+        borderpad=0.2, labelspacing=0.6,
+    )
     path = FINAL / "10_phenology_interannual_sd.png"
     fig.savefig(path, dpi=140, bbox_inches="tight", facecolor="white")
     plt.close(fig)

@@ -96,9 +96,13 @@ def topography(row: np.ndarray, col: np.ndarray, lum: np.ndarray) -> dict[str, n
     }
 
 
-def cover_share(lum: np.ndarray, mask: np.ndarray) -> np.ndarray:
-    taken = lum[mask]
-    return np.array([np.mean(taken == code) for code, _name in COVER], np.float64)
+def within_type_rate(lum: np.ndarray, ok: np.ndarray, high: np.ndarray) -> np.ndarray:
+    """Fraction of each land-cover type whose pixels are in the high-SD set."""
+    rates = []
+    for code, _name in COVER:
+        pool = ok & (lum == code)
+        rates.append(float(np.mean(high[pool])) if np.any(pool) else np.nan)
+    return np.array(rates, np.float64)
 
 
 def map_panel(ax, image, extent, title, norm, cmap, font) -> object:
@@ -157,20 +161,21 @@ def draw(sos_img, eos_img, extent, shares, sos_sd, fields, sos_cut, eos_cut) -> 
 
     labels = [name for _code, name in COVER]
     x = np.arange(len(labels))
-    width = 0.25
+    width = 0.36
     series = (
-        (shares["all"], "#bdbdbd", "All pixels"),
         (shares["sos"], "#1b7f4e", f"Green-up SD ≥ {sos_cut:.0f} d"),
         (shares["eos"], "#b86e00", f"Dormancy SD ≥ {eos_cut:.0f} d"),
     )
     for i, (values, color, label) in enumerate(series):
-        ax_c.bar(x + (i - 1) * width, 100 * values, width=width, color=color, label=label)
+        ax_c.bar(x + (i - 0.5) * width, 100 * values, width=width, color=color, label=label)
+    ax_c.axhline(10, color="#666666", lw=1.0, ls="--", label="10% of all pixels")
     ax_c.set_xticks(x)
     ax_c.set_xticklabels(labels, fontproperties=small, fontsize=10)
-    ax_c.set_ylabel("Share (%)", fontproperties=font)
-    ax_c.set_ylim(0, 70)
-    ax_c.set_title("(c)  Land cover of high-SD pixels", fontproperties=font, fontsize=12, loc="left")
-    ax_c.legend(frameon=False, prop=arial(9), loc="upper right")
+    ax_c.set_ylabel("High-SD pixels in type (%)", fontproperties=font)
+    top = float(np.nanmax([100 * values for values, _color, _label in series]))
+    ax_c.set_ylim(0, max(24, np.ceil(top / 5.0) * 5.0 + 4))
+    ax_c.set_title("(c)  High-SD pixels within each type", fontproperties=font, fontsize=12, loc="left")
+    ax_c.legend(frameon=False, prop=arial(9), loc="upper left")
     ax_c.tick_params(labelsize=9)
     scatter_panel(ax_d, fields["sea_m"] / 1000.0, sos_sd, "(d)  Green-up and sea distance", "Distance to sea (km)", font, vmax)
     scatter_panel(ax_e, fields["elev"], sos_sd, "(e)  Green-up and elevation", "Elevation (m)", font, vmax)
@@ -192,10 +197,10 @@ def main() -> None:
     eos_ok = np.isfinite(eos_sd)
     sos_cut = float(np.percentile(sos_sd[sos_ok], 90))
     eos_cut = float(np.percentile(eos_sd[eos_ok], 90))
+    lum = fields["lum"]
     shares = {
-        "all": cover_share(fields["lum"], sos_ok),
-        "sos": cover_share(fields["lum"], sos_ok & (sos_sd >= sos_cut)),
-        "eos": cover_share(fields["lum"], eos_ok & (eos_sd >= eos_cut)),
+        "sos": within_type_rate(lum, sos_ok, sos_ok & (sos_sd >= sos_cut)),
+        "eos": within_type_rate(lum, eos_ok, eos_ok & (eos_sd >= eos_cut)),
     }
     for key, values in shares.items():
         text = "  ".join(f"{name} {100 * value:.1f}%" for (_code, name), value in zip(COVER, values))

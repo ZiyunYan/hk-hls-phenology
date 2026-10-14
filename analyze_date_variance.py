@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Year-to-year spread of green-up and dormancy at 30 m, 1 km, and 2 km.
+"""Year-to-year spread of 30 m green-up and dormancy.
 
-The maps use the standard deviation across years. A 1 km or 2 km value is the
-spread of that cell's yearly mean date. Pixels need six valid years. A cell-year
-mean needs 40 dated vegetation pixels, and the cell needs six such years.
+Pixels need six valid years. The maps are the standard deviation across years.
+The right-hand panels show the land cover of the high-SD pixels and the one
+environmental factor that tracks that spread, northness.
 """
 from __future__ import annotations
 
@@ -19,7 +19,7 @@ import pandas as pd
 from matplotlib.colors import Normalize
 from netCDF4 import Dataset
 from scipy.ndimage import distance_transform_edt
-from scipy.stats import pearsonr
+from scipy.stats import linregress, pearsonr
 
 from analyze_global_extremes import load_hgt, sample_elev
 from plot_style import arial, use_arial
@@ -33,10 +33,8 @@ FIG = ROOT / "figures"
 X0, Y0, PIX = 799980.0, 2500020.0, 30.0
 HEIGHT = 1830
 MIN_YEARS = 6
-MIN_CELL = 40
-GREEN = (71, 72, 73, 74)
 URBAN = (1, 2, 3, 11, 21, 22, 23, 31, 41, 42, 43, 44)
-COVER = {71: "Woodland", 72: "Shrubland", 73: "Grassland", 74: "Mangrove"}
+COVER = ((71, "Woodland"), (72, "Shrubland"), (73, "Grassland"), (74, "Mangrove"))
 
 
 def log(msg: str) -> None:
@@ -64,84 +62,11 @@ def pixel_sd(dates: np.ndarray) -> np.ndarray:
     return sd
 
 
-def cell_keys(row: np.ndarray, col: np.ndarray, pix: int) -> np.ndarray:
-    return (row.astype(np.int64) // pix) * 100000 + (col.astype(np.int64) // pix)
-
-
-def grid_sd(row: np.ndarray, col: np.ndarray, dates: np.ndarray, pix: int) -> tuple[np.ndarray, np.ndarray]:
-    """Interannual SD of the cell-year mean, and within-cell SD of pixel medians."""
-    key = cell_keys(row, col, pix)
-    uniq, inv = np.unique(key, return_inverse=True)
-    n_year = dates.shape[1]
-    mean = np.full((uniq.size, n_year), np.nan, np.float64)
-    for year in range(n_year):
-        values = dates[:, year]
-        ok = np.isfinite(values)
-        if not np.any(ok):
-            continue
-        count = np.bincount(inv[ok], minlength=uniq.size)
-        total = np.bincount(inv[ok], weights=values[ok].astype(np.float64), minlength=uniq.size)
-        good = count >= MIN_CELL
-        mean[good, year] = total[good] / count[good]
-    enough = np.isfinite(mean).sum(axis=1) >= MIN_YEARS
-    temporal = np.full(uniq.size, np.nan, np.float32)
-    temporal[enough] = np.nanstd(mean[enough], axis=1)
-
-    count = np.isfinite(dates).sum(axis=1)
-    kept = count >= MIN_YEARS
-    med = np.nanmedian(dates, axis=1)
-    use = kept & np.isfinite(med)
-    n = np.bincount(inv[use], minlength=uniq.size).astype(np.float64)
-    total = np.bincount(inv[use], weights=med[use].astype(np.float64), minlength=uniq.size)
-    total2 = np.bincount(inv[use], weights=(med[use].astype(np.float64) ** 2), minlength=uniq.size)
-    spatial = np.full(uniq.size, np.nan, np.float32)
-    many = n >= MIN_CELL
-    var = (total2[many] - total[many] ** 2 / n[many]) / (n[many] - 1.0)
-    spatial[many] = np.sqrt(np.clip(var, 0, None))
-    return uniq, temporal, spatial, inv, med, kept
-
-
-def paint_cells(uniq: np.ndarray, values: np.ndarray, pix: int, veg: np.ndarray) -> np.ndarray:
-    iy, ix = np.indices((HEIGHT, HEIGHT))
-    key = (iy // pix).astype(np.int64) * 100000 + (ix // pix)
-    pos = np.searchsorted(uniq, key.ravel())
-    pos = np.clip(pos, 0, uniq.size - 1)
-    matched = uniq[pos] == key.ravel()
-    out = np.full(key.size, np.nan, np.float32)
-    take = matched & np.isfinite(values[pos])
-    out[take] = values[pos[take]]
-    image = out.reshape(HEIGHT, HEIGHT)
-    image[~veg] = np.nan
-    return image
-
-
 def paint_pixels(row: np.ndarray, col: np.ndarray, values: np.ndarray) -> np.ndarray:
     image = np.full((HEIGHT, HEIGHT), np.nan, np.float32)
     ok = np.isfinite(values)
     image[row[ok], col[ok]] = values[ok]
     return image
-
-
-def variance_share(row, col, dates, pix: int) -> float:
-    """Fraction of pixel-date variance that sits inside cells, pooled over years."""
-    key = cell_keys(row, col, pix)
-    within = 0.0
-    total = 0.0
-    for year in range(dates.shape[1]):
-        values = dates[:, year]
-        ok = np.isfinite(values)
-        if int(ok.sum()) < 100:
-            continue
-        v = values[ok].astype(np.float64)
-        k = key[ok]
-        _, inv = np.unique(k, return_inverse=True)
-        n = np.bincount(inv).astype(np.float64)
-        sm = np.bincount(inv, weights=v)
-        grand = v.mean()
-        cell = sm / n
-        total += float(np.sum((v - grand) ** 2))
-        within += float(np.sum((v - cell[inv]) ** 2))
-    return within / total if total > 0 else np.nan
 
 
 def topography(row: np.ndarray, col: np.ndarray, lum: np.ndarray) -> dict[str, np.ndarray]:
@@ -171,47 +96,80 @@ def topography(row: np.ndarray, col: np.ndarray, lum: np.ndarray) -> dict[str, n
     }
 
 
-def group_line(name: str, mask: np.ndarray, fields: dict[str, np.ndarray]) -> None:
-    n = int(mask.sum())
-    parts = [f"{name:16} n {n:7d}"]
-    for key in ("elev", "slope", "northness", "sea_m", "urban_m"):
-        parts.append(f"{key} {np.nanmedian(fields[key][mask]):7.1f}")
-    lum = fields["lum"][mask]
-    for code, label in COVER.items():
-        parts.append(f"{label} {np.mean(lum == code):5.1%}")
-    log("  " + "  ".join(parts))
+def cover_share(lum: np.ndarray, mask: np.ndarray) -> np.ndarray:
+    taken = lum[mask]
+    return np.array([np.mean(taken == code) for code, _name in COVER], np.float64)
 
 
-def summarize(label: str, values: np.ndarray) -> None:
-    v = values[np.isfinite(values)]
-    qs = np.percentile(v, [10, 50, 90])
-    log(f"{label:22} n {v.size:7d}  p10 {qs[0]:5.1f}  median {qs[1]:5.1f}  p90 {qs[2]:5.1f}")
+def map_panel(ax, image, extent, title, norm, cmap, font) -> object:
+    show = np.ma.masked_invalid(image)
+    im = ax.imshow(show, origin="upper", extent=extent, cmap=cmap, norm=norm, interpolation="nearest")
+    med = float(np.nanmedian(image))
+    ax.set_title(f"{title}\nmedian {med:.0f} d", fontproperties=font, fontsize=12, loc="left")
+    ax.set_xlabel("Longitude", fontproperties=font)
+    ax.set_ylabel("Latitude", fontproperties=font)
+    ax.tick_params(labelsize=8)
+    return im
 
 
-def draw(images: list[tuple[str, np.ndarray]], extent: list[float]) -> None:
+def scatter_panel(ax, x, y, title, font, ylim) -> None:
+    finite = np.isfinite(x) & np.isfinite(y)
+    slope, intercept, r, _p, _se = linregress(x[finite], y[finite])
+    rng = np.random.default_rng(20261014)
+    take = rng.choice(np.flatnonzero(finite), size=6000, replace=False)
+    ax.scatter(x[take], y[take], s=8, c="#1f4e79", alpha=0.28, linewidths=0, rasterized=True)
+    xs = np.linspace(-1.0, 1.0, 40)
+    ax.plot(xs, intercept + slope * xs, color="#c0392b", lw=1.6)
+    ax.set_xlim(-1.05, 1.05)
+    ax.set_ylim(0, ylim)
+    ax.set_title(f"{title}\nr = {r:+.2f}", fontproperties=font, fontsize=12, loc="left")
+    ax.set_xlabel("Northness (-1 south, +1 north)", fontproperties=font)
+    ax.set_ylabel("SD (days)", fontproperties=font)
+    ax.tick_params(labelsize=9)
+    log(f"{title}  r {r:+.3f}  n {int(finite.sum())}")
+
+
+def draw(sos_img, eos_img, extent, shares, sos_sd, eos_sd, north, sos_cut, eos_cut) -> None:
     use_arial()
     font = arial(11)
-    fig, axes = plt.subplots(2, 3, figsize=(13.2, 8.8), layout="constrained")
-    finite = np.concatenate([img[np.isfinite(img)] for _, img in images])
+    small = arial(10)
+    fig = plt.figure(figsize=(13.4, 8.8), layout="constrained")
+    gs = fig.add_gridspec(6, 2, width_ratios=[1.15, 1.05])
+    ax_a = fig.add_subplot(gs[0:3, 0])
+    ax_b = fig.add_subplot(gs[3:6, 0])
+    ax_c = fig.add_subplot(gs[0:2, 1])
+    ax_d = fig.add_subplot(gs[2:4, 1])
+    ax_e = fig.add_subplot(gs[4:6, 1])
+    finite = np.concatenate([sos_img[np.isfinite(sos_img)], eos_img[np.isfinite(eos_img)]])
     vmax = float(np.ceil(np.percentile(finite, 98) / 5.0) * 5.0)
     cmap = plt.get_cmap("viridis").copy()
     cmap.set_bad("#e6e6e6")
-    last = None
-    for ax, (title, image) in zip(axes.ravel(), images):
-        show = np.ma.masked_invalid(image)
-        last = ax.imshow(
-            show, origin="upper", extent=extent, cmap=cmap,
-            norm=Normalize(0, vmax), interpolation="nearest",
-        )
-        med = float(np.nanmedian(image))
-        ax.set_title(f"{title}\nmedian {med:.0f} d", fontproperties=font, fontsize=12, loc="left")
-        ax.set_xlabel("Longitude", fontproperties=font)
-        ax.set_ylabel("Latitude", fontproperties=font)
-        ax.tick_params(labelsize=8)
-    cbar = fig.colorbar(last, ax=axes, fraction=0.03, pad=0.02)
-    cbar.set_label("Interannual SD (days)", fontproperties=font, fontsize=11)
+    norm = Normalize(0, vmax)
+    im = map_panel(ax_a, sos_img, extent, "(a)  Green-up (15%)", norm, cmap, font)
+    map_panel(ax_b, eos_img, extent, "(b)  Dormancy (50%)", norm, cmap, font)
+    cbar = fig.colorbar(im, ax=[ax_a, ax_b], fraction=0.046, pad=0.06)
+    cbar.set_label("SD (days)", fontproperties=font, fontsize=11)
     cbar.ax.tick_params(labelsize=9)
-    FINAL.mkdir(parents=True, exist_ok=True)
+
+    labels = [name for _code, name in COVER]
+    x = np.arange(len(labels))
+    width = 0.25
+    series = (
+        (shares["all"], "#bdbdbd", "All pixels"),
+        (shares["sos"], "#1b7f4e", f"Green-up SD ≥ {sos_cut:.0f} d"),
+        (shares["eos"], "#b86e00", f"Dormancy SD ≥ {eos_cut:.0f} d"),
+    )
+    for i, (values, color, label) in enumerate(series):
+        ax_c.bar(x + (i - 1) * width, 100 * values, width=width, color=color, label=label)
+    ax_c.set_xticks(x)
+    ax_c.set_xticklabels(labels, fontproperties=small, fontsize=10)
+    ax_c.set_ylabel("Share (%)", fontproperties=font)
+    ax_c.set_ylim(0, 70)
+    ax_c.set_title("(c)  Land cover of high-SD pixels", fontproperties=font, fontsize=12, loc="left")
+    ax_c.legend(frameon=False, prop=arial(9), loc="upper right")
+    ax_c.tick_params(labelsize=9)
+    scatter_panel(ax_d, north, sos_sd, "(d)  Green-up and northness", font, vmax)
+    scatter_panel(ax_e, north, eos_sd, "(e)  Dormancy and northness", font, vmax)
     path = FINAL / "10_phenology_interannual_sd.png"
     fig.savefig(path, dpi=140, bbox_inches="tight", facecolor="white")
     plt.close(fig)
@@ -220,77 +178,44 @@ def draw(images: list[tuple[str, np.ndarray]], extent: list[float]) -> None:
 
 def main() -> None:
     row, col, sos, eos, lum = load_dates()
-    veg = np.isin(lum, GREEN)
+    sos_sd = pixel_sd(sos)
+    eos_sd = pixel_sd(eos)
+    fields = topography(row, col, lum)
     meta = json.loads((ROOT / "data/meta.json").read_text())["bounds_lonlat"]
     extent = [meta["west"], meta["east"], meta["south"], meta["north"]]
-    panels = []
-    records = []
-    fields = None
-    for target, dates in (("Green-up (15%)", sos), ("Dormancy (50%)", eos)):
-        sd = pixel_sd(dates)
-        summarize(f"{target} 30 m", sd)
-        panels.append((f"({ 'ad'[target.startswith('D')] })  {target}, 30 m", paint_pixels(row, col, sd)))
-        # fix letters after both rows are known
-        for pix, scale, letter_sos, letter_eos in ((33, "1 km", "b", "e"), (67, "2 km", "c", "f")):
-            uniq, temporal, spatial, inv, med, kept = grid_sd(row, col, dates, pix)
-            summarize(f"{target} {scale} temporal", temporal)
-            summarize(f"{target} {scale} within cell", spatial)
-            share = variance_share(row, col, dates, pix)
-            log(f"{target} {scale} variance inside cells {share:.2%}")
-            letter = letter_eos if target.startswith("D") else letter_sos
-            panels.append((f"({letter})  {target}, {scale}", paint_cells(uniq, temporal, pix, veg)))
-            wide = spatial[np.isfinite(spatial)]
-            records.append({
-                "target": target, "scale": scale,
-                "within_median_d": float(np.median(wide)),
-                "within_p90_d": float(np.percentile(wide, 90)),
-                "frac_within_gt10": float(np.mean(wide > 10)),
-                "frac_within_gt15": float(np.mean(wide > 15)),
-                "variance_inside": share,
-            })
-            if target.startswith("G") and pix == 33:
-                cell_med = np.full(row.shape, np.nan, np.float32)
-                n = np.bincount(inv, minlength=uniq.size)
-                # median of dated pixels is not the bincount mean; use the pixel median's cell mean
-                use = kept & np.isfinite(med)
-                total = np.bincount(inv[use], weights=med[use].astype(np.float64), minlength=uniq.size)
-                nn = np.bincount(inv[use], minlength=uniq.size).astype(np.float64)
-                good = nn >= MIN_CELL
-                centre = np.full(uniq.size, np.nan, np.float32)
-                centre[good] = total[good] / nn[good]
-                cell_med[use] = centre[inv[use]]
-                fields = topography(row, col, lum)
-                fields["sos_sd"] = sd
-                fields["dev"] = np.abs(med - cell_med)
-                fields["kept"] = kept & np.isfinite(sd)
-        if target.startswith("D"):
-            fields["eos_sd"] = sd
-    # Letters in storage order are wrong because each target appends 30 m then scales.
-    # Rebuild in row-major a–f.
-    ordered = [panels[0], panels[1], panels[2], panels[3], panels[4], panels[5]]
-    letters = "abcdef"
-    ordered = [(f"({letters[i]})  {title.split('  ', 1)[1]}", image) for i, (title, image) in enumerate(ordered)]
-    draw(ordered, extent)
-
-    kept = fields["kept"]
-    sd = fields["sos_sd"][kept]
-    edge = np.nanpercentile(sd, 90)
-    mid = np.nanpercentile(sd, 50)
-    unstable = kept.copy()
-    unstable[kept] = sd >= edge
-    stable = kept.copy()
-    stable[kept] = sd <= mid
-    log(f"unstable SOS SD >= {edge:.1f} d (p90), stable <= {mid:.1f} d (p50)")
-    both = kept & np.isfinite(fields["eos_sd"])
-    r, p = pearsonr(fields["sos_sd"][both], fields["eos_sd"][both])
-    log(f"pixel SOS SD vs EOS SD  r {r:+.2f}  p {p:.3g}  n {int(both.sum())}")
-    group_line("unstable", unstable, fields)
-    group_line("stable", stable, fields)
-    log(f"unstable |date - 1 km mean| median {np.nanmedian(fields['dev'][unstable]):.1f} d")
-    log(f"stable   |date - 1 km mean| median {np.nanmedian(fields['dev'][stable]):.1f} d")
-    table = pd.DataFrame(records)
+    sos_ok = np.isfinite(sos_sd)
+    eos_ok = np.isfinite(eos_sd)
+    sos_cut = float(np.percentile(sos_sd[sos_ok], 90))
+    eos_cut = float(np.percentile(eos_sd[eos_ok], 90))
+    shares = {
+        "all": cover_share(fields["lum"], sos_ok),
+        "sos": cover_share(fields["lum"], sos_ok & (sos_sd >= sos_cut)),
+        "eos": cover_share(fields["lum"], eos_ok & (eos_sd >= eos_cut)),
+    }
+    for key, values in shares.items():
+        text = "  ".join(f"{name} {100 * value:.1f}%" for (_code, name), value in zip(COVER, values))
+        log(f"{key:4} {text}")
+    rows = []
+    for factor in ("elev", "slope", "northness", "sea_m", "urban_m"):
+        for target, sd, ok in (("green-up", sos_sd, sos_ok), ("dormancy", eos_sd, eos_ok)):
+            x = fields[factor]
+            mask = ok & np.isfinite(x)
+            r, p = pearsonr(x[mask], sd[mask])
+            rows.append({"factor": factor, "target": target, "r": r, "p": p, "n": int(mask.sum())})
+            log(f"{target:10} {factor:10} r {r:+.3f}")
+    draw(
+        paint_pixels(row, col, sos_sd),
+        paint_pixels(row, col, eos_sd),
+        extent,
+        shares,
+        sos_sd,
+        eos_sd,
+        fields["northness"],
+        sos_cut,
+        eos_cut,
+    )
     out = FIG / "phenology_scale_variance.csv"
-    table.to_csv(out, index=False)
+    pd.DataFrame(rows).to_csv(out, index=False)
     log(f"wrote {out}")
 
 

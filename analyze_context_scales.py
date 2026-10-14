@@ -42,18 +42,16 @@ MIN_VEG = 15
 MIN_CELLS = 8
 TO_XY = pyproj.Transformer.from_crs(4326, 32649, always_xy=True)
 DRIVERS = (
-    ("urban", "建成区比例"),
-    ("green", "绿地比例"),
-    ("sea_km", "离海距离 (km)"),
-    ("uhi", "热岛残差 (°C)"),
+    ("urban", "Built-up fraction"),
+    ("green", "Green-cover fraction"),
+    ("sea_km", "Distance to sea (km)"),
+    ("uhi", "Heat-island residual (°C)"),
 )
 
 
 def fontprop():
-    if FONT.is_file():
-        font_manager.fontManager.addfont(str(FONT))
-        return font_manager.FontProperties(fname=str(FONT))
-    return font_manager.FontProperties(family="DejaVu Sans")
+    from plot_style import arial
+    return arial(10)
 
 
 def load_phenology() -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
@@ -218,7 +216,7 @@ def draw_lines(table: pd.DataFrame, path: Path, font) -> None:
     fig, axes = plt.subplots(1, 2, figsize=(11.2, 4.6), dpi=140, sharey=True)
     fig.subplots_adjust(top=0.82, bottom=0.16, wspace=0.12)
     colors = {"urban": "#c0392b", "green": "#1e8449", "sea_km": "#1f618d", "uhi": "#d68910"}
-    for ax, target, title in zip(axes, ("sos", "eos"), ("返青", "休眠")):
+    for ax, target, title in zip(axes, ("sos", "eos"), ("Green-up, 15%", "Dormancy, 50%")):
         for key, label in DRIVERS:
             block = table[(table["target"] == target) & (table["driver"] == key)].sort_values("grid_m")
             ax.plot(block["grid_m"] / 1000, block["r"], marker="o", color=colors[key], label=label, lw=1.6)
@@ -226,49 +224,63 @@ def draw_lines(table: pd.DataFrame, path: Path, font) -> None:
         ax.set_xscale("log")
         ax.set_xticks([0.5, 1, 2, 5, 10, 20])
         ax.set_xticklabels(["0.5", "1", "2", "5", "10", "20"])
-        ax.set_xlabel("格网 (公里)", fontproperties=font, fontsize=11)
+        ax.set_xlabel("Cell size (km)", fontproperties=font, fontsize=11)
         ax.set_title(title, fontproperties=font, fontsize=13, loc="left")
         ax.tick_params(labelsize=9)
-    axes[0].set_ylabel("与格子平均日期的相关 r", fontproperties=font, fontsize=11)
+    axes[0].set_ylabel("Correlation", fontproperties=font, fontsize=11)
     handles, labels = axes[0].get_legend_handles_labels()
     fig.legend(handles, labels, loc="lower center", ncol=4, frameon=False, prop=font, bbox_to_anchor=(0.5, 0.01))
-    fig.suptitle("建成区、绿地、离海距离和热岛残差，在不同格网上和物候的相关", fontproperties=font, fontsize=13, x=0.06, ha="left")
+    fig.suptitle("Correlation vs cell size. Green-up 15%, dormancy 50%.", fontproperties=font, fontsize=12)
     fig.savefig(path, dpi=140)
     plt.close(fig)
 
 
 def draw_scatter(frame: pd.DataFrame, path: Path, font) -> None:
-    fig, axes = plt.subplots(2, 4, figsize=(13.4, 6.6), dpi=130)
-    fig.subplots_adjust(left=0.06, right=0.985, top=0.86, bottom=0.10, hspace=0.38, wspace=0.32)
-    for row, (target, ylabel) in enumerate((("sos", "返青（日序）"), ("eos", "休眠（日序）"))):
+    fig, axes = plt.subplots(2, 4, figsize=(13.8, 6.8), dpi=130)
+    fig.subplots_adjust(left=0.07, right=0.985, top=0.94, bottom=0.10, hspace=0.42, wspace=0.34)
+    ylabels = ("Green-up (15%)", "Dormancy (50%)")
+    for row, (target, ylabel) in enumerate((("sos", ylabels[0]), ("eos", ylabels[1]))):
         for col, (key, label) in enumerate(DRIVERS):
             ax = axes[row, col]
             x = frame[key].to_numpy(np.float64)
             y = frame[target].to_numpy(np.float64)
-            r, p, n = corr(x, y)
+            r, _p, _n = corr(x, y)
             ax.scatter(x, y, s=12, color="#1f4e79", alpha=0.55, linewidths=0)
             mask = np.isfinite(x) & np.isfinite(y)
             if mask.sum() >= 2 and np.std(x[mask]) > 0:
                 slope, intercept = np.polyfit(x[mask], y[mask], 1)
                 xs = np.linspace(np.min(x[mask]), np.max(x[mask]), 40)
                 ax.plot(xs, intercept + slope * xs, color="#c0392b", lw=1.4)
-            ax.set_title(f"{label}\nn = {n}   r = {r:+.2f}", fontproperties=font, fontsize=10, loc="left")
+            letter = "abcdefgh"[row * 4 + col]
+            ax.set_title(f"({letter})  {label}", fontproperties=font, fontsize=12, loc="left", pad=10)
+            ax.annotate(
+                f"r = {r:+.2f}",
+                xy=(1, 1), xycoords="axes fraction",
+                xytext=(0, 3), textcoords="offset points",
+                ha="right", va="bottom",
+                fontproperties=font, fontsize=11, color="#222222",
+                annotation_clip=False,
+            )
             if row == 1:
-                ax.set_xlabel(label, fontproperties=font, fontsize=9)
+                ax.set_xlabel(label, fontproperties=font, fontsize=11)
             if col == 0:
-                ax.set_ylabel(ylabel, fontproperties=font, fontsize=10)
-            ax.tick_params(labelsize=8)
-    fig.suptitle("2 公里格网。每个点是一个格子的多年平均日期。", fontproperties=font, fontsize=13, x=0.06, ha="left")
-    fig.savefig(path, dpi=130)
+                ax.set_ylabel(ylabel, fontproperties=font, fontsize=12)
+            ax.tick_params(labelsize=10)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(path, dpi=130, bbox_inches="tight", facecolor="white")
     plt.close(fig)
 
 
 def draw_maps(frame: pd.DataFrame, path: Path, font) -> None:
-    fields = (("sos", "返青（日序）", "viridis"), ("eos", "休眠（日序）", "viridis"),
-              ("urban", "建成区比例", "YlOrRd"), ("uhi", "热岛残差 (°C)", "coolwarm"))
-    fig, axes = plt.subplots(2, 2, figsize=(8.6, 8.2), dpi=130)
-    fig.subplots_adjust(top=0.90, wspace=0.18, hspace=0.22)
-    for ax, (key, label, cmap) in zip(axes.ravel(), fields):
+    fields = (
+        ("sos", "(a)  Green-up (15%)", "Day of year", "viridis"),
+        ("eos", "(b)  Dormancy (50%)", "Day of year", "viridis"),
+        ("urban", "(c)  Built-up fraction", "Fraction", "YlOrRd"),
+        ("uhi", "(d)  Heat-island residual", "°C", "coolwarm"),
+    )
+    fig, axes = plt.subplots(2, 2, figsize=(8.8, 8.2), dpi=130)
+    fig.subplots_adjust(top=0.96, wspace=0.22, hspace=0.18)
+    for ax, (key, label, unit, cmap) in zip(axes.ravel(), fields):
         iy = frame["iy"].to_numpy()
         ix = frame["ix"].to_numpy()
         img = np.full((iy.max() + 1, ix.max() + 1), np.nan)
@@ -279,12 +291,13 @@ def draw_maps(frame: pd.DataFrame, path: Path, font) -> None:
         else:
             lo, hi = np.nanpercentile(img, [2, 98])
             im = ax.imshow(img, cmap=cmap, vmin=lo, vmax=hi, origin="upper")
-        ax.set_title(label, fontproperties=font, fontsize=11, loc="left")
+        ax.set_title(label, fontproperties=font, fontsize=12, loc="left")
         ax.set_xticks([])
         ax.set_yticks([])
-        fig.colorbar(im, ax=ax, fraction=0.046, pad=0.02)
-    fig.suptitle("1 公里格网", fontproperties=font, fontsize=13, x=0.06, ha="left")
-    fig.savefig(path, dpi=130)
+        cbar = fig.colorbar(im, ax=ax, fraction=0.046, pad=0.02)
+        cbar.set_label(unit, fontproperties=font, fontsize=10)
+        cbar.ax.tick_params(labelsize=9)
+    fig.savefig(path, dpi=130, bbox_inches="tight", facecolor="white")
     plt.close(fig)
 
 
@@ -327,8 +340,12 @@ def main() -> None:
     FIG.mkdir(parents=True, exist_ok=True)
     table.to_csv(FIG / "context_scale_correlations.csv", index=False)
     draw_lines(table, FIG / "context_scale_correlations.png", font)
+    final = FIG / "final"
+    final.mkdir(parents=True, exist_ok=True)
     draw_scatter(stored[2000], FIG / "context_scatter_2km.png", font)
+    draw_scatter(stored[2000], final / "context_scatter_2km.png", font)
     draw_maps(stored[1000], FIG / "context_maps_1km.png", font)
+    draw_maps(stored[1000], final / "context_maps_1km.png", font)
     print("wrote figures/context_scale_correlations.png")
 
 

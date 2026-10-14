@@ -343,9 +343,9 @@ def main() -> None:
     final = FIG / "final"
     final.mkdir(parents=True, exist_ok=True)
     draw_scatter(stored[2000], FIG / "context_scatter_2km.png", font)
-    draw_scatter(stored[2000], final / "context_scatter_2km.png", font)
+    draw_scatter(stored[2000], final / "09_context_scatter_2km.png", font)
     draw_maps(stored[1000], FIG / "context_maps_1km.png", font)
-    draw_maps(stored[1000], final / "context_maps_1km.png", font)
+    draw_maps(stored[1000], final / "08_context_maps_1km.png", font)
     print("wrote figures/context_scale_correlations.png")
 
 

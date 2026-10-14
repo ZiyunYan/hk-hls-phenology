@@ -281,7 +281,7 @@ def main() -> None:
     table = pd.DataFrame(rows)
     table_path = FIG / "driver_grid_scale_correlations.csv"
     table.to_csv(table_path, index=False)
-    final = FIG / "final" / "driver_grid_scale_scatters.png"
+    final = FIG / "final" / "07_driver_grid_scale_scatters.png"
     draw(bundles, final)
     print(f"wrote {final}")
     print(f"wrote {table_path}")

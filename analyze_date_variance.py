@@ -2,8 +2,8 @@
 """Year-to-year spread of 30 m green-up and dormancy.
 
 Pixels need six valid years. The maps are the standard deviation across years.
-The right-hand panels show the land cover of the high-SD pixels and the one
-environmental factor that tracks that spread, northness.
+The right-hand panels show the land cover of the high-SD pixels and the
+environmental factors that still correlate once slope and aspect are left out.
 """
 from __future__ import annotations
 
@@ -112,34 +112,38 @@ def map_panel(ax, image, extent, title, norm, cmap, font) -> object:
     return im
 
 
-def scatter_panel(ax, x, y, title, font, ylim) -> None:
+def scatter_panel(ax, x, y, title, xlabel, font, ylim) -> float:
     finite = np.isfinite(x) & np.isfinite(y)
     slope, intercept, r, _p, _se = linregress(x[finite], y[finite])
     rng = np.random.default_rng(20261014)
-    take = rng.choice(np.flatnonzero(finite), size=6000, replace=False)
+    take = rng.choice(np.flatnonzero(finite), size=5000, replace=False)
     ax.scatter(x[take], y[take], s=8, c="#1f4e79", alpha=0.28, linewidths=0, rasterized=True)
-    xs = np.linspace(-1.0, 1.0, 40)
-    ax.plot(xs, intercept + slope * xs, color="#c0392b", lw=1.6)
-    ax.set_xlim(-1.05, 1.05)
+    lo, hi = np.percentile(x[finite], [1, 99])
+    pad = 0.04 * (hi - lo)
+    ax.plot(np.linspace(lo, hi, 40), intercept + slope * np.linspace(lo, hi, 40), color="#c0392b", lw=1.6)
+    ax.set_xlim(lo - pad, hi + pad)
     ax.set_ylim(0, ylim)
-    ax.set_title(f"{title}\nr = {r:+.2f}", fontproperties=font, fontsize=12, loc="left")
-    ax.set_xlabel("Northness (-1 south, +1 north)", fontproperties=font)
-    ax.set_ylabel("SD (days)", fontproperties=font)
-    ax.tick_params(labelsize=9)
+    ax.set_title(f"{title}\nr = {r:+.2f}", fontproperties=font, fontsize=11, loc="left")
+    ax.set_xlabel(xlabel, fontproperties=font, fontsize=10)
+    ax.set_ylabel("SD (days)", fontproperties=font, fontsize=10)
+    ax.tick_params(labelsize=8)
     log(f"{title}  r {r:+.3f}  n {int(finite.sum())}")
+    return float(r)
 
 
-def draw(sos_img, eos_img, extent, shares, sos_sd, eos_sd, north, sos_cut, eos_cut) -> None:
+def draw(sos_img, eos_img, extent, shares, sos_sd, fields, sos_cut, eos_cut) -> None:
     use_arial()
     font = arial(11)
     small = arial(10)
-    fig = plt.figure(figsize=(13.4, 8.8), layout="constrained")
-    gs = fig.add_gridspec(6, 2, width_ratios=[1.15, 1.05])
-    ax_a = fig.add_subplot(gs[0:3, 0])
-    ax_b = fig.add_subplot(gs[3:6, 0])
-    ax_c = fig.add_subplot(gs[0:2, 1])
-    ax_d = fig.add_subplot(gs[2:4, 1])
-    ax_e = fig.add_subplot(gs[4:6, 1])
+    fig = plt.figure(figsize=(14.4, 8.6), layout="constrained")
+    gs = fig.add_gridspec(2, 2, width_ratios=[1.02, 1.45], height_ratios=[1.05, 1.0])
+    ax_a = fig.add_subplot(gs[0, 0])
+    ax_b = fig.add_subplot(gs[1, 0])
+    ax_c = fig.add_subplot(gs[0, 1])
+    sub = gs[1, 1].subgridspec(1, 3, wspace=0.08)
+    ax_d = fig.add_subplot(sub[0, 0])
+    ax_e = fig.add_subplot(sub[0, 1])
+    ax_f = fig.add_subplot(sub[0, 2])
     finite = np.concatenate([sos_img[np.isfinite(sos_img)], eos_img[np.isfinite(eos_img)]])
     vmax = float(np.ceil(np.percentile(finite, 98) / 5.0) * 5.0)
     cmap = plt.get_cmap("viridis").copy()
@@ -147,7 +151,7 @@ def draw(sos_img, eos_img, extent, shares, sos_sd, eos_sd, north, sos_cut, eos_c
     norm = Normalize(0, vmax)
     im = map_panel(ax_a, sos_img, extent, "(a)  Green-up (15%)", norm, cmap, font)
     map_panel(ax_b, eos_img, extent, "(b)  Dormancy (50%)", norm, cmap, font)
-    cbar = fig.colorbar(im, ax=[ax_a, ax_b], fraction=0.046, pad=0.06)
+    cbar = fig.colorbar(im, ax=[ax_a, ax_b], orientation="horizontal", fraction=0.04, pad=0.22)
     cbar.set_label("SD (days)", fontproperties=font, fontsize=11)
     cbar.ax.tick_params(labelsize=9)
 
@@ -168,8 +172,9 @@ def draw(sos_img, eos_img, extent, shares, sos_sd, eos_sd, north, sos_cut, eos_c
     ax_c.set_title("(c)  Land cover of high-SD pixels", fontproperties=font, fontsize=12, loc="left")
     ax_c.legend(frameon=False, prop=arial(9), loc="upper right")
     ax_c.tick_params(labelsize=9)
-    scatter_panel(ax_d, north, sos_sd, "(d)  Green-up and northness", font, vmax)
-    scatter_panel(ax_e, north, eos_sd, "(e)  Dormancy and northness", font, vmax)
+    scatter_panel(ax_d, fields["sea_m"] / 1000.0, sos_sd, "(d)  Green-up and sea distance", "Distance to sea (km)", font, vmax)
+    scatter_panel(ax_e, fields["elev"], sos_sd, "(e)  Green-up and elevation", "Elevation (m)", font, vmax)
+    scatter_panel(ax_f, fields["urban_m"] / 1000.0, sos_sd, "(f)  Green-up and built-up", "Distance to built-up (km)", font, vmax)
     path = FINAL / "10_phenology_interannual_sd.png"
     fig.savefig(path, dpi=140, bbox_inches="tight", facecolor="white")
     plt.close(fig)
@@ -196,7 +201,7 @@ def main() -> None:
         text = "  ".join(f"{name} {100 * value:.1f}%" for (_code, name), value in zip(COVER, values))
         log(f"{key:4} {text}")
     rows = []
-    for factor in ("elev", "slope", "northness", "sea_m", "urban_m"):
+    for factor in ("elev", "sea_m", "urban_m"):
         for target, sd, ok in (("green-up", sos_sd, sos_ok), ("dormancy", eos_sd, eos_ok)):
             x = fields[factor]
             mask = ok & np.isfinite(x)
@@ -209,8 +214,7 @@ def main() -> None:
         extent,
         shares,
         sos_sd,
-        eos_sd,
-        fields["northness"],
+        fields,
         sos_cut,
         eos_cut,
     )

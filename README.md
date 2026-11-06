@@ -2,6 +2,13 @@
 
 End-to-end workflow for **Harmonized Landsat Sentinel-2 (HLS)** over Hong Kong (tile **49QHE**, 1830×1830 @ 30 m): 3-day compositing, stable-vegetation masking, Transformer gap-filling, and phenology / driver analysis.
 
+## Data dictionary & visual workflow / 数据字典与可视化工作流
+
+- [中文：全部数据、物理含义、单位/范围、预处理与代码入口](docs/DATA_AND_WORKFLOW_ZH.md)
+- [English: data provenance, physical meaning, units/ranges, preprocessing, and code map](docs/DATA_AND_WORKFLOW_EN.md)
+
+Both guides include a GitHub-rendered Mermaid workflow and distinguish the main sl122/EVI/SOS15–EOS50 analysis from comparison branches and implementation qualifications.
+
 ## Data & models (Hugging Face)
 
 | Asset | Hub repo |
